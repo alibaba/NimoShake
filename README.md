@@ -1,6 +1,6 @@
-NimoShake: sync from dynamodb to mongodb, including full sync and increase sync.
-NimoFullCheck: check data consistency after syncing.
-These two tools are developed and maintained by NoSQL Team in Alibaba-Cloud Database department.
+NimoShake: sync from dynamodb to mongodb, including full sync and increase sync.<br>
+NimoFullCheck: check data consistency after syncing.<br>
+These two tools are developed and maintained by NoSQL Team in Alibaba-Cloud Database department.<br>
 
 * [中文文档介绍](https://yq.aliyun.com/articles/717439)
 * [binary download](https://github.com/alibaba/NimoShake/releases)
