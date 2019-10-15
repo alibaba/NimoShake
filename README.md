@@ -1,2 +1,2 @@
 # NimoShake
-init
+init 2
