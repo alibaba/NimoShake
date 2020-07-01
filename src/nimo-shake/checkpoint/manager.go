@@ -209,7 +209,7 @@ func PrepareFullSyncCkpt(address, db string, dynamoSession *dynamodb.DynamoDB,
 			}
 		}
 
-		LOG.Info("wait new streams created...", sourceTableMap)
+		LOG.Info("wait new streams created[%v]...", sourceTableMap)
 		time.Sleep(30 * time.Second) // wait new stream created
 	}
 

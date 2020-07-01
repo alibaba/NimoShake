@@ -109,8 +109,8 @@ func sanitizeOptions() error {
 		conf.Options.QpsIncrBatchNum = 128
 	}
 
-	if conf.Options.TargetType != utils.TargetTypeMongo {
-		return fmt.Errorf("conf.Options.TargetType[%v] only supports mongo currently", conf.Options.TargetType)
+	if conf.Options.TargetType != utils.TargetTypeMongo && conf.Options.TargetType != utils.TargetTypeAliyunDynamoProxy {
+		return fmt.Errorf("conf.Options.TargetType[%v] supports {mongodb, aliyun_dynamo_proxy} currently", conf.Options.TargetType)
 	}
 
 	if len(conf.Options.TargetAddress) == 0 {
@@ -142,9 +142,17 @@ func sanitizeOptions() error {
 		return fmt.Errorf("illegal target.mongodb.type[%v]", conf.Options.TargetMongoDBType)
 	}
 
-	if conf.Options.TargetMongoDBExist != "" && conf.Options.TargetMongoDBExist != utils.TargetMongoDBExistRename &&
+	if conf.Options.TargetType == utils.TargetTypeMongo && conf.Options.TargetMongoDBExist != "" &&
+		conf.Options.TargetMongoDBExist != utils.TargetMongoDBExistRename &&
+		conf.Options.TargetMongoDBExist != utils.TargetMongoDBExistDrop ||
+		conf.Options.TargetType == utils.TargetTypeAliyunDynamoProxy && conf.Options.TargetMongoDBExist != "" &&
 		conf.Options.TargetMongoDBExist != utils.TargetMongoDBExistDrop {
-		return fmt.Errorf("illegal target.mongodb.exist[%v]", conf.Options.TargetMongoDBExist)
+		return fmt.Errorf("illegal target.mongodb.exist[%v] when target.type=%v",
+			conf.Options.TargetMongoDBExist, conf.Options.TargetType)
+	}
+	// set ConvertType
+	if conf.Options.TargetType == utils.TargetTypeAliyunDynamoProxy {
+		conf.Options.ConvertType = utils.ConvertTypeSame
 	}
 
 	if conf.Options.CheckpointAddress == "" {

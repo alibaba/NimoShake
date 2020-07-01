@@ -24,6 +24,7 @@ type Index struct {
 	ns         utils.NS
 }
 
+// deprecated
 func NewIndex(sourceConn *dynamodb.DynamoDB, targetConn *utils.MongoConn, ns utils.NS) *Index {
 	return &Index{
 		sourceConn: sourceConn,

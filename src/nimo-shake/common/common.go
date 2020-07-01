@@ -13,6 +13,7 @@ const (
 
 	ConvertTypeRaw    = "raw"
 	ConvertTypeChange = "change"
+	ConvertTypeSame   = "same" // used in dynamodb -> dynamo-proxy
 
 	KB = 1024
 	MB = 1024 * KB
@@ -24,7 +25,8 @@ const (
 	SyncModeFull = "full"
 	SyncModeIncr = "incr"
 
-	TargetTypeMongo = "mongodb"
+	TargetTypeMongo             = "mongodb"
+	TargetTypeAliyunDynamoProxy = "aliyun_dynamo_proxy"
 
 	TargetMongoDBTypeReplica  = "replica"
 	TargetMongoDBTypeSharding = "sharding"

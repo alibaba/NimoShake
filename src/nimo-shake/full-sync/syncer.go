@@ -70,9 +70,9 @@ func Start(dynamoSession *dynamodb.DynamoDB) {
 }
 
 func checkTableExists(tableList []string) error {
-	if conf.Options.TargetType == utils.TargetTypeMongo {
-		LOG.Info("target.mongodb.exist is set[%v]", conf.Options.TargetMongoDBExist)
-
+	LOG.Info("target.mongodb.exist is set[%v]", conf.Options.TargetMongoDBExist)
+	switch conf.Options.TargetType {
+	case utils.TargetTypeMongo:
 		mongoClient, err := utils.NewMongoConn(conf.Options.TargetAddress, utils.ConnectModePrimary, true)
 		if err != nil {
 			return fmt.Errorf("create mongodb session error[%v]", err)
@@ -109,8 +109,11 @@ func checkTableExists(tableList []string) error {
 				}
 			}
 		}
-		LOG.Info("finish handling table exists")
+	case utils.TargetTypeAliyunDynamoProxy:
+		// TODO
 	}
+
+	LOG.Info("finish handling table exists")
 
 	return nil
 }

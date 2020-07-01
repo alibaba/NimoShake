@@ -12,6 +12,7 @@ import (
 	LOG "github.com/vinllen/log4go"
 	"github.com/aws/aws-sdk-go/aws"
 	"nimo-shake/qps"
+	"nimo-shake/writer"
 )
 
 const (
@@ -20,19 +21,29 @@ const (
 )
 
 type tableSyncer struct {
-	id          int
-	ns          utils.NS
-	sourceConn  *dynamodb.DynamoDB
-	targetConn  *utils.MongoConn
-	fetcherChan chan *dynamodb.ScanOutput // chan between fetcher and parser
-	parserChan  chan protocal.MongoData   // chan between parser and writer
-	converter   protocal.Converter        // converter
+	id                  int
+	ns                  utils.NS
+	sourceConn          *dynamodb.DynamoDB
+	sourceTableDescribe *dynamodb.TableDescription
+	targetConn          *utils.MongoConn
+	fetcherChan         chan *dynamodb.ScanOutput // chan between fetcher and parser
+	parserChan          chan interface{}          // chan between parser and writer
+	converter           protocal.Converter        // converter
 }
 
 func NewTableSyncer(id int, table string) *tableSyncer {
 	sourceConn, err := utils.CreateDynamoSession(conf.Options.LogLevel)
 	if err != nil {
 		LOG.Error("tableSyncer[%v] with table[%v] create dynamodb session error[%v]", id, table, err)
+		return nil
+	}
+
+	// describe source table
+	tableDescription, err := sourceConn.DescribeTable(&dynamodb.DescribeTableInput{
+		TableName: aws.String(table),
+	})
+	if err != nil {
+		LOG.Error("tableSyncer[%v] with table[%v] describe failed[%v]", id, table, err)
 		return nil
 	}
 
@@ -49,10 +60,11 @@ func NewTableSyncer(id int, table string) *tableSyncer {
 	}
 
 	return &tableSyncer{
-		id:         id,
-		sourceConn: sourceConn,
-		targetConn: targetConn,
-		converter:  converter,
+		id:                  id,
+		sourceConn:          sourceConn,
+		sourceTableDescribe: tableDescription.Table,
+		targetConn:          targetConn,
+		converter:           converter,
 		ns: utils.NS{
 			Database:   conf.Options.Id,
 			Collection: table,
@@ -66,7 +78,28 @@ func (ts *tableSyncer) String() string {
 
 func (ts *tableSyncer) Sync() {
 	ts.fetcherChan = make(chan *dynamodb.ScanOutput, fetcherChanSize)
-	ts.parserChan = make(chan protocal.MongoData, parserChanSize)
+	ts.parserChan = make(chan interface{}, parserChanSize)
+
+	targetWriter := writer.NewWriter(conf.Options.TargetType, conf.Options.TargetAddress, ts.ns, conf.Options.LogLevel)
+	if targetWriter == nil {
+		LOG.Crashf("%s create writer failed", ts)
+		return
+	}
+	// create table with description
+	if err := targetWriter.CreateTable(ts.ns, ts.sourceTableDescribe); err != nil {
+		LOG.Crashf("%s create table failed: %v", ts, err)
+		return
+	}
+
+	// start write index with background
+	if conf.Options.FullEnableIndexPrimary || conf.Options.FullEnableIndexUser {
+		// enable index
+		LOG.Info("%s try to write index", ts.String())
+		if err := targetWriter.CreateIndex(ts.sourceTableDescribe); err != nil {
+			LOG.Error("%s create index failed[%v]", ts.String(), err)
+		}
+		LOG.Info("%s finish syncing index", ts.String())
+	}
 
 	// start fetcher to fetch all data from DynamoDB
 	go ts.fetcher()
@@ -101,17 +134,6 @@ func (ts *tableSyncer) Sync() {
 	wgWriter.Wait() // wait all writer exit
 
 	LOG.Info("%s finish syncing table", ts.String())
-
-	// start write index
-	if conf.Options.FullEnableIndexPrimary || conf.Options.FullEnableIndexUser {
-		// enable index
-		LOG.Info("%s try to write index", ts.String())
-		ix := NewIndex(ts.sourceConn, ts.targetConn, ts.ns)
-		if err := ix.CreateIndex(); err != nil {
-			LOG.Error("%s create index failed[%v]", ts.String(), err)
-		}
-		LOG.Info("%s finish syncing index", ts.String())
-	}
 }
 
 func (ts *tableSyncer) Close() {

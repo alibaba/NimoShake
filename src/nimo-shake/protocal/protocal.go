@@ -9,7 +9,7 @@ import (
 // convert DynamoDB attributeValue to bson
 type Converter interface {
 	// run
-	Run(input map[string]*dynamodb.AttributeValue) (MongoData, error)
+	Run(input map[string]*dynamodb.AttributeValue) (interface{}, error)
 }
 
 func NewConverter(tp string) Converter {
@@ -18,12 +18,14 @@ func NewConverter(tp string) Converter {
 		return new(RawConverter)
 	case utils.ConvertTypeChange:
 		return new(TypeConverter)
+	case utils.ConvertTypeSame:
+		return new(SameConverter)
 	default:
 		return nil
 	}
 }
 
-type MongoData struct {
+type RawData struct {
 	Size int         // fake size, only calculate real data
 	Data interface{} // real data
 }
