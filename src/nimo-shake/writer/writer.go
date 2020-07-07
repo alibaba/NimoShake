@@ -14,6 +14,12 @@ type Writer interface{
 	WriteBulk(input []interface{}) error
 	// create index
 	CreateIndex(tableDescribe *dynamodb.TableDescription) error
+	// insert
+	Insert(input []interface{}, index []interface{}) error
+	// delete
+	Delete(input []interface{}) error
+	// update
+	Update(input []interface{}, index []interface{}) error
 	// close
 	Close()
 }

@@ -85,6 +85,10 @@ func (dpw *DynamoProxyWriter) CreateTable(ns utils.NS, tableDescribe *dynamodb.T
 	return nil
 }
 
+func (dpw *DynamoProxyWriter) String() string {
+	return dpw.Name
+}
+
 func (dpw *DynamoProxyWriter) WriteBulk(input []interface{}) error {
 	if len(input) == 0 {
 		return nil
@@ -108,10 +112,96 @@ func (dpw *DynamoProxyWriter) WriteBulk(input []interface{}) error {
 	return err
 }
 
+// do nothing
 func (dpw *DynamoProxyWriter) CreateIndex(tableDescribe *dynamodb.TableDescription) error {
 	return nil
 }
 
 func (dpw *DynamoProxyWriter) Close() {
 
+}
+
+// input type is map[string]*dynamodb.AttributeValue
+func (dpw *DynamoProxyWriter) Insert(input []interface{}, index []interface{}) error {
+	if len(input) == 0 {
+		return nil
+	}
+
+	request := make([]*dynamodb.WriteRequest, len(index))
+	for i, ele := range index {
+		request[i] = &dynamodb.WriteRequest{
+			PutRequest: &dynamodb.PutRequest{
+				Item: ele.(map[string]*dynamodb.AttributeValue),
+			},
+		}
+	}
+
+	_, err := dpw.svc.BatchWriteItem(&dynamodb.BatchWriteItemInput{
+		RequestItems: map[string][]*dynamodb.WriteRequest {
+			dpw.ns.Collection: request,
+		},
+	})
+
+	if utils.DynamoIgnoreError(err, "i", true) {
+		LOG.Warn("%s ignore error[%v] when insert", dpw, err)
+		return nil
+	}
+
+	return err
+}
+
+func (dpw *DynamoProxyWriter) Delete(index []interface{}) error {
+	if len(index) == 0 {
+		return nil
+	}
+
+	request := make([]*dynamodb.WriteRequest, len(index))
+	for i, ele := range index {
+		request[i] = &dynamodb.WriteRequest{
+			DeleteRequest: &dynamodb.DeleteRequest{
+				Key: ele.(map[string]*dynamodb.AttributeValue),
+			},
+		}
+	}
+
+	_, err := dpw.svc.BatchWriteItem(&dynamodb.BatchWriteItemInput{
+		RequestItems: map[string][]*dynamodb.WriteRequest {
+			dpw.ns.Collection: request,
+		},
+	})
+
+	if utils.DynamoIgnoreError(err, "d", true) {
+		LOG.Warn("%s ignore error[%v] when delete", dpw, err)
+		return nil
+	}
+
+	return err
+}
+
+func (dpw *DynamoProxyWriter) Update(input []interface{}, index []interface{}) error {
+	if len(input) == 0 {
+		return nil
+	}
+
+	request := make([]*dynamodb.WriteRequest, len(index))
+	for i, ele := range index {
+		request[i] = &dynamodb.WriteRequest{
+			PutRequest: &dynamodb.PutRequest{
+				Item: ele.(map[string]*dynamodb.AttributeValue),
+			},
+		}
+	}
+
+	_, err := dpw.svc.BatchWriteItem(&dynamodb.BatchWriteItemInput{
+		RequestItems: map[string][]*dynamodb.WriteRequest {
+			dpw.ns.Collection: request,
+		},
+	})
+
+	if utils.DynamoIgnoreError(err, "u", true) {
+		LOG.Warn("%s ignore error[%v] when insert", dpw, err)
+		return nil
+	}
+
+	return err
 }

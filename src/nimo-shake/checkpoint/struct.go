@@ -35,14 +35,14 @@ const (
 )
 
 type Checkpoint struct {
-	ShardId         string `bson:"shard_id"`      // shard id
-	FatherId        string `bson:"father_id"`     // father id
-	SequenceNumber  string `bson:"seq_num"`       // checkpoint
-	Status          string `bson:"status"`        // status
-	WorkerId        string `bson:"worker_id"`     // thread number
-	IteratorType    string `bson:"iterator_type"` // "LATEST" or "AT_SEQUENCE_NUMBER"
-	ShardIt         string `bson:"shard_it"`      // only used when IteratorType == "LATEST"
-	UpdateTimestamp string `bson:"update_date"`
+	ShardId         string `bson:"shard_id" json:"shard_id"`           // shard id
+	FatherId        string `bson:"father_id" json:"father_id"`         // father id
+	SequenceNumber  string `bson:"seq_num" json:"seq_num"`             // checkpoint
+	Status          string `bson:"status" json:"status"`               // status
+	WorkerId        string `bson:"worker_id" json:"worker_id"`         // thread number
+	IteratorType    string `bson:"iterator_type" json:"iterator_type"` // "LATEST" or "AT_SEQUENCE_NUMBER"
+	ShardIt         string `bson:"shard_it" json:"shard_it"`           // only used when IteratorType == "LATEST"
+	UpdateTimestamp string `bson:"update_date" json:"update_date"`
 }
 
 type Status struct {

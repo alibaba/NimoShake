@@ -15,6 +15,7 @@ import (
 	LOG "github.com/vinllen/log4go"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/vinllen/mgo/bson"
+	"nimo-shake/writer"
 )
 
 const (
@@ -111,8 +112,8 @@ type Dispatcher struct {
 	id                  int
 	shard               *utils.ShardNode
 	dynamoStreamSession *dynamodbstreams.DynamoDBStreams
-	targetClient        *utils.MongoConn
-	ckptClient          *utils.MongoConn
+	targetWriter        writer.Writer
+	cpktWriter          writer.Writer
 	batchChan           chan *dynamodbstreams.Record
 	executorChan        chan *ExecuteNode
 	converter           protocal.Converter
@@ -131,16 +132,21 @@ func NewDispatcher(id int, shard *utils.ShardNode) *Dispatcher {
 		return nil
 	}
 
-	targetClient, err := utils.NewMongoConn(conf.Options.TargetAddress, utils.ConnectModePrimary, true)
-	if err != nil {
-		LOG.Crashf("connect target mongodb[%v] failed[%v]", conf.Options.TargetAddress, err)
-		return nil
+	ns := utils.NS{
+		Database:   conf.Options.Id,
+		Collection: shard.Table,
 	}
 
-	ckptClient, err := utils.NewMongoConn(conf.Options.CheckpointAddress, utils.ConnectModePrimary, true)
-	if err != nil {
-		LOG.Crashf("connect checkpoint mongodb[%v] failed[%v]", conf.Options.CheckpointAddress, err)
-		return nil
+	// create target writer
+	targetWriter := writer.NewWriter(conf.Options.TargetType, conf.Options.TargetAddress, ns, conf.Options.LogLevel)
+	if targetWriter == nil {
+		LOG.Crashf("create target-writer with type[%v] and address[%v] failed", conf.Options.TargetType, conf.Options.TargetAddress)
+	}
+
+	// create checkpoint writer
+	cpktWriter := writer.NewWriter(conf.Options.TargetType, conf.Options.TargetAddress, ns, conf.Options.LogLevel)
+	if cpktWriter == nil {
+		LOG.Crashf("create checkpoint-writer with type[%v] and address[%v] failed", conf.Options.TargetType, conf.Options.TargetAddress)
 	}
 
 	// converter
@@ -153,15 +159,12 @@ func NewDispatcher(id int, shard *utils.ShardNode) *Dispatcher {
 		id:                  id,
 		shard:               shard,
 		dynamoStreamSession: dynamoStreamSession,
-		targetClient:        targetClient,
-		ckptClient:          ckptClient,
+		targetWriter:        targetWriter,
+		cpktWriter:          cpktWriter,
 		batchChan:           make(chan *dynamodbstreams.Record, DispatcherBatcherChanSize),
 		executorChan:        make(chan *ExecuteNode, DispatcherExecuterChanSize),
 		converter:           converter,
-		ns: utils.NS{
-			Database:   conf.Options.Id,
-			Collection: shard.Table,
-		},
+		ns:                  ns,
 	}
 
 	go d.batcher()
@@ -318,12 +321,14 @@ func (d *Dispatcher) getRecords(shardIt string) {
 type ExecuteNode struct {
 	tp                 string
 	operate            []interface{}
+	index              []interface{}
 	lastSequenceNumber string
 }
 
 func (d *Dispatcher) batcher() {
 	node := &ExecuteNode{
 		operate: make([]interface{}, 0, BatcherNumber),
+		index:   make([]interface{}, 0, BatcherNumber),
 	}
 
 	var preEvent string
@@ -368,7 +373,8 @@ func (d *Dispatcher) batcher() {
 
 			node = &ExecuteNode{
 				tp:      *record.EventName,
-				operate: make([]interface{}, 0, BatcherNumber),
+				operate: make([]interface{}, 0, BatcherNumber), // need fetch data field when type is RawData
+				index:   make([]interface{}, 0, BatcherNumber), // index list
 			}
 			preEvent = *record.EventName
 			batchNr = 0
@@ -383,6 +389,7 @@ func (d *Dispatcher) batcher() {
 
 		// LOG.Info("cccc1 %v", index.Data)
 
+		// batch into list
 		switch *record.EventName {
 		case EventInsert:
 			value, err := d.converter.Run(record.Dynamodb.NewImage)
@@ -390,23 +397,48 @@ func (d *Dispatcher) batcher() {
 				LOG.Crashf("%s converter do insert meets error[%v]", d.String(), err)
 			}
 
-			node.operate = append(node.operate, value.Data)
+			switch d.targetWriter.(type) {
+			case *writer.MongoWriter:
+				node.operate = append(node.operate, value.(protocal.RawData).Data)
+				node.index = append(node.index, index.(protocal.RawData).Data)
+			case *writer.DynamoProxyWriter:
+				node.operate = append(node.operate, value)
+				node.index = append(node.index, index)
+			default:
+				LOG.Crashf("unknown operator")
+			}
 		case EventMODIFY:
 			value, err := d.converter.Run(record.Dynamodb.NewImage)
 			if err != nil {
 				LOG.Crashf("%s converter do insert meets error[%v]", d.String(), err)
 			}
 
-			node.operate = append(node.operate, index.Data, value.Data)
+			switch d.targetWriter.(type) {
+			case *writer.MongoWriter:
+				node.operate = append(node.operate, value.(protocal.RawData).Data)
+				node.index = append(node.index, index.(protocal.RawData).Data)
+			case *writer.DynamoProxyWriter:
+				node.operate = append(node.operate, value)
+				node.index = append(node.index, index)
+			default:
+				LOG.Crashf("unknown operator")
+			}
 		case EventRemove:
-			node.operate = append(node.operate, index.Data)
+			switch d.targetWriter.(type) {
+			case *writer.MongoWriter:
+				node.index = append(node.index, index.(protocal.RawData).Data)
+			case *writer.DynamoProxyWriter:
+				node.index = append(node.index, index)
+			default:
+				LOG.Crashf("unknown operator")
+			}
 		default:
 			LOG.Crashf("%s unknown event name[%v]", d.String(), *record.EventName)
 		}
 
 		node.lastSequenceNumber = *record.Dynamodb.SequenceNumber
 		batchNr += 1
-		batchSize += index.Size
+		// batchSize += index.Size
 	}
 
 	LOG.Info("%s batcher exit", d.String())
@@ -416,40 +448,18 @@ func (d *Dispatcher) batcher() {
 func (d *Dispatcher) executor() {
 	for node := range d.executorChan {
 		LOG.Info("%s try write data with length[%v]", d.String(), len(node.operate))
-		for {
-			LOG.Debug("%s operate[%v] write data[%v]", d.String(), node.tp, node.operate)
-			// LOG.Info("dddd %s operate[%v] write data[%v]", d.String(), node.tp, node.operate)
-			bulk := d.targetClient.Session.DB(d.ns.Database).C(d.ns.Collection).Bulk()
-			switch node.tp {
-			case EventInsert:
-				bulk.Insert(node.operate...)
-			case EventMODIFY:
-				bulk.Update(node.operate...)
-			case EventRemove:
-				bulk.Remove(node.operate...)
-			}
-
-			if _, err := bulk.Run(); err != nil {
-				index, errMsg, dup := utils.FindFirstErrorIndexAndMessage(err.Error())
-				if index == -1 || !dup {
-					LOG.Crashf("%s bulk[%v] run[%v] failed[%v], index[%v] dup[%v]", d.String(), node.tp,
-						node.operate, err, index, dup)
-				}
-				LOG.Warn("%s bulk[%v] run[%v] meets dup[%v], skip and retry", d.String(), node.tp, node.operate, errMsg)
-
-				// re-run the remains data if not empty
-				nextIndex := index + 1
-				if node.tp == EventMODIFY {
-					nextIndex = index + 2
-				}
-				if nextIndex < len(node.operate) {
-					node.operate = node.operate[nextIndex:]
-					continue
-				}
-			}
-
-			break
+		var err error
+		switch node.tp {
+		case EventInsert:
+			err = d.targetWriter.Insert(node.operate, node.index)
+		case EventMODIFY:
+			err = d.targetWriter.Update(node.operate, node.index)
+		case EventRemove:
+			err = d.targetWriter.Delete(node.index)
+		default:
+			LOG.Crashf("unknown write operation[%v]", node.tp)
 		}
+
 		d.checkpointPosition = node.lastSequenceNumber
 	}
 

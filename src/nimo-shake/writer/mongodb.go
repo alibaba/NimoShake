@@ -107,6 +107,92 @@ func (mw *MongoWriter) Close() {
 	mw.conn.Close()
 }
 
+func (mw *MongoWriter) Insert(input []interface{}, index []interface{}) error {
+	bulk := mw.conn.Session.DB(mw.ns.Database).C(mw.ns.Collection).Bulk()
+	bulk.Unordered()
+	bulk.Insert(input...)
+
+	if _, err := bulk.Run(); err != nil {
+		if utils.MongodbIgnoreError(err, "i", false) {
+			LOG.Warn("%s ignore error[%v] when insert", mw, err)
+			return nil
+		}
+
+		// duplicate key
+		if mgo.IsDup(err) {
+			if conf.Options.IncreaseExecutorInsertOnDupUpdate {
+				LOG.Warn("%s duplicated document found. reinsert or update", mw)
+				return mw.updateOnInsert(input, index)
+			}
+		}
+		return err
+	}
+	return nil
+}
+
+func (mw *MongoWriter) updateOnInsert(input []interface{}, index []interface{}) error {
+	// upsert one by one
+	for i := range input {
+		_, err := mw.conn.Session.DB(mw.ns.Database).C(mw.ns.Collection).Upsert(index[i], input[i])
+		if utils.MongodbIgnoreError(err, "u", false) {
+			LOG.Warn("%s ignore error[%v] when upsert", mw, err)
+			return nil
+		}
+
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (mw *MongoWriter) Delete(index []interface{}) error {
+	bulk := mw.conn.Session.DB(mw.ns.Database).C(mw.ns.Collection).Bulk()
+	bulk.Unordered()
+	bulk.Remove(index...)
+
+	if _, err := bulk.Run(); err != nil {
+		if utils.MongodbIgnoreError(err, "i", false) {
+			LOG.Warn("%s ignore error[%v] when insert", mw, err)
+			return nil
+		}
+
+		return err
+	}
+
+	return nil
+}
+
+func (mw *MongoWriter) Update(input []interface{}, index []interface{}) error {
+	updates := make([]interface{}, 0, len(input) * 2)
+	for i := range input {
+		updates = append(updates, index[i])
+		updates = append(updates, input[i])
+	}
+
+	bulk := mw.conn.Session.DB(mw.ns.Database).C(mw.ns.Collection).Bulk()
+	bulk.Update(updates...)
+
+	if _, err := bulk.Run(); err != nil {
+		// parse error
+		idx, _, _ := utils.FindFirstErrorIndexAndMessage(err.Error())
+		if idx == -1 {
+			return err
+		}
+
+		if utils.MongodbIgnoreError(err, "u", false) {
+			return mw.updateOnInsert(input[idx: ], index[idx: ])
+		}
+
+		if mgo.IsDup(err) {
+			return mw.updateOnInsert(input[idx + 1: ], index[idx + 1: ])
+		}
+		return err
+	}
+
+	return nil
+}
+
 func (mw *MongoWriter) createPrimaryIndex(primaryIndexes []*dynamodb.KeySchemaElement, parseMap map[string]string) error {
 	primaryKeyWithType, err := mw.createSingleIndex(primaryIndexes, parseMap, true)
 	if err != nil {
@@ -150,7 +236,7 @@ func (mw *MongoWriter) createUserIndex(globalSecondaryIndexes []*dynamodb.Global
 }
 
 func (mw *MongoWriter) createSingleIndex(primaryIndexes []*dynamodb.KeySchemaElement, parseMap map[string]string,
-	isPrimaryKey bool) (string, error) {
+		isPrimaryKey bool) (string, error) {
 	primaryKey, sortKey, err := utils.ParsePrimaryAndSortKey(primaryIndexes, parseMap)
 	if err != nil {
 		return "", fmt.Errorf("parse primary and sort key failed[%v]", err)
@@ -169,8 +255,9 @@ func (mw *MongoWriter) createSingleIndex(primaryIndexes []*dynamodb.KeySchemaEle
 	if len(indexList) >= 1 && isPrimaryKey {
 		// write index
 		index := mgo.Index{
-			Key:    indexList,
-			Unique: true,
+			Key:        indexList,
+			Unique:     true,
+			Background: true,
 		}
 		if err := mw.conn.Session.DB(mw.ns.Database).C(mw.ns.Collection).EnsureIndex(index); err != nil {
 			return "", fmt.Errorf("create primary union unique index failed[%v]", err)

@@ -129,6 +129,9 @@ func sanitizeOptions() error {
 		return fmt.Errorf("full.document.parser[%v] should in (0, 4096]", conf.Options.FullDocumentParser)
 	}
 
+	// always enable
+	conf.Options.FullEnableIndexPrimary = true
+
 	if conf.Options.ConvertType != utils.ConvertTypeRaw && conf.Options.ConvertType != utils.ConvertTypeChange {
 		return fmt.Errorf("convert.type[%v] illegal", conf.Options.ConvertType)
 	}
