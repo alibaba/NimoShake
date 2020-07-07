@@ -37,7 +37,8 @@ t=$(date "+%Y-%m-%d_%H:%M:%S")
 echo "[ BUILD RELEASE ]"
 run_builder='go build -v'
 
-modules=(nimo-shake nimo-full-check)
+#modules=(nimo-shake nimo-full-check)
+modules=(nimo-shake)
 
 goos=(linux darwin windows)
 for g in "${goos[@]}"; do

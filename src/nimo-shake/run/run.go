@@ -30,12 +30,6 @@ func Start() {
 		LOG.Crashf("connect mongodb[%v] failed[%v]", conf.Options.TargetAddress, err)
 	}
 
-	// check checkpoint connection
-	ckptConn, err := utils.NewMongoConn(conf.Options.CheckpointAddress, utils.ConnectModePrimary, true)
-	if err != nil {
-		LOG.Crashf("connect checkpoint mongodb[%v] failed[%v]", conf.Options.CheckpointAddress, err)
-	}
-
 	// create dynamo session
 	dynamoSession, err := utils.CreateDynamoSession(conf.Options.LogLevel)
 	if err != nil {
@@ -48,11 +42,14 @@ func Start() {
 		LOG.Crashf("create dynamodb stream session failed[%v]", err)
 	}
 
+	LOG.Info("create checkpoint writer")
+	ckptWriter := checkpoint.NewWriter(checkpoint.CheckpointWriterTypeMongo, conf.Options.CheckpointAddress, conf.Options.CheckpointDb)
+
 	LOG.Info("check checkpoint")
 	var skipFull bool
 	var streamMap map[string]*dynamodbstreams.Stream
 	if conf.Options.SyncMode == utils.SyncModeAll {
-		skipFull, streamMap, err = checkpoint.CheckCkpt(conf.Options.CheckpointAddress, conf.Options.CheckpointDb, dynamoStreamSession)
+		skipFull, streamMap, err = checkpoint.CheckCkpt(ckptWriter, dynamoStreamSession)
 		if err != nil {
 			LOG.Crashf("check checkpoint failed[%v]", err)
 		}
@@ -62,14 +59,12 @@ func Start() {
 	if skipFull == false {
 		if conf.Options.SyncMode == utils.SyncModeAll {
 			LOG.Info("drop old checkpoint")
-			if err := checkpoint.DropCheckpoint(conf.Options.CheckpointAddress, conf.Options.CheckpointDb); err != nil &&
-				err.Error() != utils.NotFountErr {
+			if err := ckptWriter.DropAll(); err != nil && err.Error() != utils.NotFountErr {
 				LOG.Crashf("drop checkpoint failed[%v]", err)
 			}
 
 			LOG.Info("prepare checkpoint")
-			streamMap, err = checkpoint.PrepareFullSyncCkpt(conf.Options.CheckpointAddress, conf.Options.CheckpointDb, dynamoSession,
-				dynamoStreamSession)
+			streamMap, err = checkpoint.PrepareFullSyncCkpt(ckptWriter, dynamoSession, dynamoStreamSession)
 			if err != nil {
 				LOG.Crashf("prepare checkpoint failed[%v]", err)
 			}
@@ -90,10 +85,10 @@ func Start() {
 	}
 
 	// update checkpoint
-	if err := checkpoint.UpsertStatus(ckptConn, conf.Options.CheckpointDb, checkpoint.CheckpointStatusTable, checkpoint.CheckpointStatusValueIncrSync); err != nil {
+	if err := ckptWriter.UpdateStatus(checkpoint.CheckpointStatusValueIncrSync); err != nil {
 		LOG.Crashf("set checkpoint to [%v] failed[%v]", checkpoint.CheckpointStatusValueIncrSync, err)
 	}
 	LOG.Info("start increase sync")
 
-	incr_sync.Start(streamMap)
+	incr_sync.Start(streamMap, ckptWriter)
 }

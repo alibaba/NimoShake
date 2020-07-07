@@ -1,12 +1,13 @@
 package checkpoint
 
 import (
-	"nimo-shake/common"
-	"github.com/vinllen/mgo/bson"
 	"nimo-shake/filter"
+	"sync"
 )
 
 const (
+	CheckpointWriterTypeMongo     = "mongo"
+	CheckpointWriterTypeFile      = "file"
 	CheckpointStatusTable         = "status_table"
 	CheckpointStatusKey           = "status_key"
 	CheckpointStatusValueEmpty    = ""
@@ -46,30 +47,55 @@ type Checkpoint struct {
 }
 
 type Status struct {
-	Key   string `bson:"key"`          // key -> CheckpointStatusKey
-	Value string `bson:"status_value"` // CheckpointStatusValueFullSync or CheckpointStatusValueIncrSync
+	Key   string `bson:"key" json:"key"`                   // key -> CheckpointStatusKey
+	Value string `bson:"status_value" json:"status_value"` // CheckpointStatusValueFullSync or CheckpointStatusValueIncrSync
 }
 
-func FindStatus(targetClient *utils.MongoConn, db, collection string) (string, error) {
-	var query Status
-	if err := targetClient.Session.DB(db).C(collection).Find(bson.M{"key": CheckpointStatusKey}).One(&query); err != nil {
-		if err.Error() == utils.NotFountErr {
-			return CheckpointStatusValueEmpty, nil
-		}
-		return "", err
-	} else {
-		return query.Value, nil
+/*---------------------------------------*/
+
+var (
+	GlobalShardIteratorMap = ShardIteratorMap{
+		mp: make(map[string]string),
 	}
+)
+
+type ShardIteratorMap struct {
+	mp   map[string]string
+	lock sync.Mutex
 }
 
-func UpsertStatus(targetClient *utils.MongoConn, db, collection string, input string) error {
-	update := Status{
-		Key:   CheckpointStatusKey,
-		Value: input,
+func (sim *ShardIteratorMap) Set(key, iterator string) bool {
+	sim.lock.Lock()
+	defer sim.lock.Unlock()
+
+	if _, ok := sim.mp[key]; ok {
+		return false
 	}
-	_, err := targetClient.Session.DB(db).C(collection).Upsert(bson.M{"key": CheckpointStatusKey}, update)
-	return err
+
+	sim.mp[key] = iterator
+	return false
 }
+
+func (sim *ShardIteratorMap) Get(key string) (string, bool) {
+	sim.lock.Lock()
+	defer sim.lock.Unlock()
+
+	it, ok := sim.mp[key]
+	return it, ok
+}
+
+func (sim *ShardIteratorMap) Delete(key string) bool {
+	sim.lock.Lock()
+	defer sim.lock.Unlock()
+
+	if _, ok := sim.mp[key]; ok {
+		delete(sim.mp, key)
+		return true
+	}
+	return false
+}
+
+/*---------------------------------------*/
 
 func FilterCkptCollection(collection string) bool {
 	return collection == CheckpointStatusTable || filter.IsFilter(collection)

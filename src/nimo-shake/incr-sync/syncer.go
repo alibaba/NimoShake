@@ -46,12 +46,12 @@ var (
 	BatcherSize   = 2 * utils.MB
 )
 
-func Start(streamMap map[string]*dynamodbstreams.Stream) {
+func Start(streamMap map[string]*dynamodbstreams.Stream, ckptWriter checkpoint.Writer) {
 	for table, stream := range streamMap {
 		LOG.Info("table[%v] stream[%v] begin", table, *stream.StreamArn)
 
 		shardChan := make(chan *utils.ShardNode, ShardChanSize)
-		fetcher := NewFetcher(table, stream, shardChan)
+		fetcher := NewFetcher(table, stream, shardChan, ckptWriter)
 		if fetcher == nil {
 			LOG.Crashf("table[%v] stream[%v] start fetcher failed", table, *stream.StreamArn)
 		}
@@ -84,7 +84,7 @@ func Start(streamMap map[string]*dynamodbstreams.Stream) {
 					GlobalShardMap[*shard.Shard.ShardId] = 1
 					GlobalShardLock.Unlock()
 
-					d := NewDispatcher(id, shard)
+					d := NewDispatcher(id, shard, ckptWriter)
 					d.Run()
 
 					// set finished flag
@@ -113,7 +113,6 @@ type Dispatcher struct {
 	shard               *utils.ShardNode
 	dynamoStreamSession *dynamodbstreams.DynamoDBStreams
 	targetWriter        writer.Writer
-	cpktWriter          writer.Writer
 	batchChan           chan *dynamodbstreams.Record
 	executorChan        chan *ExecuteNode
 	converter           protocal.Converter
@@ -122,9 +121,10 @@ type Dispatcher struct {
 	shardIt             string // only used when checkpoint is empty
 	unitTestStr         string // used for UT only
 	close               bool   // is close?
+	ckptWriter checkpoint.Writer
 }
 
-func NewDispatcher(id int, shard *utils.ShardNode) *Dispatcher {
+func NewDispatcher(id int, shard *utils.ShardNode, ckptWriter checkpoint.Writer) *Dispatcher {
 	// create dynamo stream client
 	dynamoStreamSession, err := utils.CreateDynamoStreamSession(conf.Options.LogLevel)
 	if err != nil {
@@ -143,12 +143,6 @@ func NewDispatcher(id int, shard *utils.ShardNode) *Dispatcher {
 		LOG.Crashf("create target-writer with type[%v] and address[%v] failed", conf.Options.TargetType, conf.Options.TargetAddress)
 	}
 
-	// create checkpoint writer
-	cpktWriter := writer.NewWriter(conf.Options.TargetType, conf.Options.TargetAddress, ns, conf.Options.LogLevel)
-	if cpktWriter == nil {
-		LOG.Crashf("create checkpoint-writer with type[%v] and address[%v] failed", conf.Options.TargetType, conf.Options.TargetAddress)
-	}
-
 	// converter
 	converter := protocal.NewConverter(conf.Options.ConvertType)
 	if converter == nil {
@@ -160,11 +154,11 @@ func NewDispatcher(id int, shard *utils.ShardNode) *Dispatcher {
 		shard:               shard,
 		dynamoStreamSession: dynamoStreamSession,
 		targetWriter:        targetWriter,
-		cpktWriter:          cpktWriter,
 		batchChan:           make(chan *dynamodbstreams.Record, DispatcherBatcherChanSize),
 		executorChan:        make(chan *ExecuteNode, DispatcherExecuterChanSize),
 		converter:           converter,
 		ns:                  ns,
+		ckptWriter: ckptWriter,
 	}
 
 	go d.batcher()
@@ -192,7 +186,7 @@ func (d *Dispatcher) Run() {
 
 	// check father finished
 	for {
-		fatherCkpt, err := checkpoint.QueryCkpt(father, d.ckptClient, conf.Options.CheckpointDb, d.ns.Collection)
+		fatherCkpt, err := d.ckptWriter.Query(father, d.ns.Collection)
 		if err != nil && err.Error() != utils.NotFountErr {
 			LOG.Crashf("%s query father[%v] checkpoint fail[%v]", d.String(), father, err)
 		}
@@ -215,7 +209,7 @@ func (d *Dispatcher) Run() {
 		LOG.Info("%s current shard already in ShardIteratorMap", d.String())
 	} else {
 		// check current checkpoint
-		ckpt, err := checkpoint.QueryCkpt(*d.shard.Shard.ShardId, d.ckptClient, conf.Options.CheckpointDb, d.ns.Collection)
+		ckpt, err := d.ckptWriter.Query(*d.shard.Shard.ShardId, d.ns.Collection)
 		if err != nil {
 			LOG.Crashf("%s query current[%v] checkpoint fail[%v]", d.String(), *d.shard.Shard.ShardId, err)
 		}
@@ -250,9 +244,9 @@ func (d *Dispatcher) Run() {
 	LOG.Info("%s start with shard iterator[%v]", d.String(), shardIt)
 
 	// update checkpoint: in-processing
-	err := checkpoint.UpdateCkptSet(*d.shard.Shard.ShardId, bson.M{
+	err := d.ckptWriter.UpdateWithSet(*d.shard.Shard.ShardId, map[string]interface{}{
 		checkpoint.FieldStatus: checkpoint.StatusInProcessing,
-	}, d.ckptClient, conf.Options.CheckpointDb, d.ns.Collection)
+	}, d.ns.Collection)
 	if err != nil {
 		LOG.Crashf("%s update checkpoint to in-processing failed[%v]", d.String(), err)
 	}
@@ -263,9 +257,9 @@ func (d *Dispatcher) Run() {
 	LOG.Info("%s finish shard", d.String())
 
 	// update checkpoint: finish
-	err = checkpoint.UpdateCkptSet(*d.shard.Shard.ShardId, bson.M{
+	err = d.ckptWriter.UpdateWithSet(*d.shard.Shard.ShardId, map[string]interface{}{
 		checkpoint.FieldStatus: checkpoint.StatusDone,
-	}, d.ckptClient, conf.Options.CheckpointDb, d.ns.Collection)
+	}, d.ns.Collection)
 	if err != nil {
 		LOG.Crashf("%s update checkpoint to done failed[%v]", d.String(), err)
 	}
@@ -460,6 +454,9 @@ func (d *Dispatcher) executor() {
 			LOG.Crashf("unknown write operation[%v]", node.tp)
 		}
 
+		if err != nil {
+			LOG.Crashf("execute command[%v] failed[%v]", node.tp, err)
+		}
 		d.checkpointPosition = node.lastSequenceNumber
 	}
 
@@ -470,7 +467,7 @@ func (d *Dispatcher) executor() {
 func (d *Dispatcher) ckptManager() {
 	var prevCkptPosition string
 
-	initCkpt, err := checkpoint.QueryCkpt(*d.shard.Shard.ShardId, d.ckptClient, conf.Options.CheckpointDb, d.ns.Collection)
+	initCkpt, err := d.ckptWriter.Query(*d.shard.Shard.ShardId, d.ns.Collection)
 	if err != nil && err.Error() != utils.NotFountErr {
 		LOG.Crashf("%s query checkpoint failed[%v]", d.String(), err)
 	}
@@ -502,7 +499,7 @@ func (d *Dispatcher) ckptManager() {
 				continue
 			}
 
-			ckpt = bson.M{
+			ckpt = map[string]interface{}{
 				checkpoint.FieldSeqNum:       d.checkpointPosition,
 				checkpoint.FieldIteratorType: checkpoint.IteratorTypeSequence,
 				checkpoint.FieldTimestamp:    time.Now().Format(utils.GolangSecurityTime),
@@ -510,7 +507,7 @@ func (d *Dispatcher) ckptManager() {
 		}
 
 		prevCkptPosition = d.checkpointPosition
-		err := checkpoint.UpdateCkptSet(*d.shard.Shard.ShardId, ckpt, d.ckptClient, conf.Options.CheckpointDb, d.ns.Collection)
+		err := d.ckptWriter.UpdateWithSet(*d.shard.Shard.ShardId, ckpt, d.ns.Collection)
 		if err != nil {
 			LOG.Error("%s update table[%v] shard[%v] input[%v] failed[%v]", d.String(), d.ns.Collection,
 				*d.shard.Shard.ShardId, ckpt, err)
