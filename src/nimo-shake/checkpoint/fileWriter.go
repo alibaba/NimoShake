@@ -10,13 +10,15 @@ import (
 	"encoding/json"
 	"path/filepath"
 	"reflect"
+	"bytes"
+	"strings"
 )
 
 // marshal in json
 type FileWriter struct {
-	dir      string
+	dir         string
 	fileHandler *sync.Map // file name -> fd
-	fileLock *sync.Map // file name -> lock
+	fileLock    *sync.Map // file name -> lock
 }
 
 func NewFileWriter(dir string) *FileWriter {
@@ -35,9 +37,9 @@ func NewFileWriter(dir string) *FileWriter {
 	}
 
 	return &FileWriter{
-		dir: dir,
+		dir:         dir,
 		fileHandler: new(sync.Map),
-		fileLock: new(sync.Map),
+		fileLock:    new(sync.Map),
 	}
 }
 
@@ -48,10 +50,17 @@ func (fw *FileWriter) FindStatus() (string, error) {
 	defer fw.unlockFile(CheckpointStatusTable)
 
 	file := fmt.Sprintf("%s/%s", fw.dir, CheckpointStatusTable)
+	if _, err := os.Stat(file); err != nil {
+		if os.IsNotExist(err) {
+			return CheckpointStatusValueEmpty, nil
+		}
+	}
+
 	jsonFile, err := os.Open(file)
 	if err != nil {
 		return "", err
 	}
+	defer jsonFile.Close()
 
 	byteValue, err := ioutil.ReadAll(jsonFile)
 	if err != nil {
@@ -74,7 +83,7 @@ func (fw *FileWriter) UpdateStatus(status string) error {
 
 	file := fmt.Sprintf("%s/%s", fw.dir, CheckpointStatusTable)
 	input := &Status{
-		Key: "",
+		Key:   "",
 		Value: status,
 	}
 
@@ -87,6 +96,7 @@ func (fw *FileWriter) UpdateStatus(status string) error {
 	if err != nil {
 		return err
 	}
+	defer f.Close()
 
 	_, err = f.Write(val)
 	return err
@@ -95,9 +105,13 @@ func (fw *FileWriter) UpdateStatus(status string) error {
 // extract all checkpoint
 func (fw *FileWriter) ExtractCheckpoint() (map[string]map[string]*Checkpoint, error) {
 	ckptMap := make(map[string]map[string]*Checkpoint)
+	// fileList isn't include directory
 	var fileList []string
 	err := filepath.Walk(fw.dir, func(path string, info os.FileInfo, err error) error {
-		fileList = append(fileList, path)
+		if path != fw.dir {
+			pathList := strings.Split(path, "/")
+			fileList = append(fileList, pathList[len(pathList) - 1])
+		}
 		return nil
 	})
 
@@ -130,14 +144,10 @@ func (fw *FileWriter) ExtractSingleCheckpoint(table string) (map[string]*Checkpo
 	if err != nil {
 		return nil, err
 	}
+	defer jsonFile.Close()
 
-	byteValue, err := ioutil.ReadAll(jsonFile)
+	data, err := fw.readJsonList(jsonFile)
 	if err != nil {
-		return nil, err
-	}
-
-	data := make([]*Checkpoint, 0)
-	if err := json.Unmarshal(byteValue, &data); err != nil {
 		return nil, err
 	}
 
@@ -159,14 +169,11 @@ func (fw *FileWriter) Insert(ckpt *Checkpoint, table string) error {
 	if err != nil {
 		return err
 	}
+	defer jsonFile.Close()
 
-	val, err := json.Marshal(ckpt)
-	if err != nil {
-		return nil
-	}
+	LOG.Debug("file[%s] insert data: %v", file, *ckpt)
 
-	_, err = jsonFile.Write(val)
-	return err
+	return fw.writeJsonList(jsonFile, []*Checkpoint{ckpt})
 }
 
 // update checkpoint
@@ -175,19 +182,19 @@ func (fw *FileWriter) Update(shardId string, ckpt *Checkpoint, table string) err
 	defer fw.unlockFile(table)
 
 	file := fmt.Sprintf("%s/%s", fw.dir, table)
-	jsonFile, err := os.OpenFile(file, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+	jsonFile, err := os.OpenFile(file, os.O_RDWR|os.O_CREATE, 0666)
+	if err != nil {
+		return err
+	}
+	defer jsonFile.Close()
+
+	data, err := fw.readJsonList(jsonFile)
 	if err != nil {
 		return err
 	}
 
-	byteValue, err := ioutil.ReadAll(jsonFile)
-	if err != nil {
-		return err
-	}
-
-	data := make([]*Checkpoint, 0)
-	if err := json.Unmarshal(byteValue, &data); err != nil {
-		return err
+	if len(data) == 0 {
+		return fmt.Errorf("empty data")
 	}
 
 	match := false
@@ -202,13 +209,12 @@ func (fw *FileWriter) Update(shardId string, ckpt *Checkpoint, table string) err
 		return fmt.Errorf("shardId[%v] not exists", shardId)
 	}
 
-	val, err := json.Marshal(data)
-	if err != nil {
-		return nil
-	}
+	// truncate file
+	jsonFile.Truncate(0)
+	jsonFile.Seek(0, 0)
 
-	_, err = jsonFile.Write(val)
-	return err
+	// write
+	return fw.writeJsonList(jsonFile, data)
 }
 
 // update with set
@@ -217,19 +223,19 @@ func (fw *FileWriter) UpdateWithSet(shardId string, input map[string]interface{}
 	defer fw.unlockFile(table)
 
 	file := fmt.Sprintf("%s/%s", fw.dir, table)
-	jsonFile, err := os.OpenFile(file, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+	jsonFile, err := os.OpenFile(file, os.O_RDWR|os.O_CREATE, 0666)
+	if err != nil {
+		return err
+	}
+	defer jsonFile.Close()
+
+	data, err := fw.readJsonList(jsonFile)
 	if err != nil {
 		return err
 	}
 
-	byteValue, err := ioutil.ReadAll(jsonFile)
-	if err != nil {
-		return err
-	}
-
-	data := make([]*Checkpoint, 0)
-	if err := json.Unmarshal(byteValue, &data); err != nil {
-		return err
+	if len(data) == 0 {
+		return fmt.Errorf("empty data")
 	}
 
 	match := false
@@ -243,6 +249,8 @@ func (fw *FileWriter) UpdateWithSet(shardId string, input map[string]interface{}
 				case reflect.String:
 					v, _ := val.(string)
 					field.SetString(v)
+				case reflect.Invalid:
+					return fmt.Errorf("invalid field[%v]", key)
 				}
 			}
 
@@ -253,13 +261,12 @@ func (fw *FileWriter) UpdateWithSet(shardId string, input map[string]interface{}
 		return fmt.Errorf("shardId[%v] not exists", shardId)
 	}
 
-	val, err := json.Marshal(data)
-	if err != nil {
-		return nil
-	}
+	// truncate file
+	jsonFile.Truncate(0)
+	jsonFile.Seek(0, 0)
 
-	_, err = jsonFile.Write(val)
-	return err
+	// write
+	return fw.writeJsonList(jsonFile, data)
 }
 
 // query
@@ -268,18 +275,14 @@ func (fw *FileWriter) Query(shardId string, table string) (*Checkpoint, error) {
 	defer fw.unlockFile(table)
 
 	file := fmt.Sprintf("%s/%s", fw.dir, table)
-	jsonFile, err := os.OpenFile(file, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+	jsonFile, err := os.OpenFile(file, os.O_RDWR|os.O_CREATE, 0666)
 	if err != nil {
 		return nil, err
 	}
+	defer jsonFile.Close()
 
-	byteValue, err := ioutil.ReadAll(jsonFile)
+	data, err := fw.readJsonList(jsonFile)
 	if err != nil {
-		return nil, err
-	}
-
-	data := make([]*Checkpoint, 0)
-	if err := json.Unmarshal(byteValue, &data); err != nil {
 		return nil, err
 	}
 
@@ -296,13 +299,17 @@ func (fw *FileWriter) Query(shardId string, table string) (*Checkpoint, error) {
 func (fw *FileWriter) DropAll() error {
 	var fileList []string
 	err := filepath.Walk(fw.dir, func(path string, info os.FileInfo, err error) error {
-		fileList = append(fileList, path)
+		if path != fw.dir {
+			fileList = append(fileList, path)
+		}
 		return nil
 	})
 
 	if err != nil {
 		return err
 	}
+
+	LOG.Info("drop file list: %v", fileList)
 
 	for _, file := range fileList {
 		fw.lockFile(file)
@@ -336,4 +343,38 @@ func (fw *FileWriter) unlockFile(table string) {
 
 	lock := val.(*sync.Mutex)
 	lock.Unlock()
+}
+
+func (fw *FileWriter) readJsonList(f *os.File) ([]*Checkpoint, error) {
+	byteValue, err := ioutil.ReadAll(f)
+	if err != nil {
+		return nil, err
+	}
+
+	byteList := bytes.Split(byteValue, []byte{10})
+	ret := make([]*Checkpoint, 0, len(byteList))
+	for i := 0; i < len(byteList) - 1; i++ {
+		var ele Checkpoint
+		if err := json.Unmarshal(byteList[i], &ele); err != nil {
+			return nil, err
+		}
+		ret = append(ret, &ele)
+	}
+
+	return ret, nil
+}
+
+func (fw *FileWriter) writeJsonList(f *os.File, input []*Checkpoint) error {
+	for _, single := range input {
+		val, err := json.Marshal(single)
+		if err != nil {
+			return nil
+		}
+
+		val = append(val, byte(10)) // suffix
+		if _, err := f.Write(val); err != nil {
+			return err
+		}
+	}
+	return nil
 }

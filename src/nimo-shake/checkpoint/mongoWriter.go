@@ -31,7 +31,7 @@ func NewMongoWriter(address, db string) *MongoWriter {
 
 func (mw *MongoWriter) FindStatus() (string, error) {
 	var query Status
-	if err := mw.conn.Session.DB(mw.db).C(CheckpointStatusTable).Find(bson.M{"key": CheckpointStatusKey}).One(&query); err != nil {
+	if err := mw.conn.Session.DB(mw.db).C(CheckpointStatusTable).Find(bson.M{"Key": CheckpointStatusKey}).One(&query); err != nil {
 		if err.Error() == utils.NotFountErr {
 			return CheckpointStatusValueEmpty, nil
 		}
@@ -46,7 +46,7 @@ func (mw *MongoWriter) UpdateStatus(status string) error {
 		Key:   CheckpointStatusKey,
 		Value: status,
 	}
-	_, err := mw.conn.Session.DB(mw.db).C(CheckpointStatusTable).Upsert(bson.M{"key": CheckpointStatusKey}, update)
+	_, err := mw.conn.Session.DB(mw.db).C(CheckpointStatusTable).Upsert(bson.M{"Key": CheckpointStatusKey}, update)
 	return err
 }
 
@@ -93,16 +93,16 @@ func (mw *MongoWriter) Insert(ckpt *Checkpoint, table string) error {
 }
 
 func (mw *MongoWriter) Update(shardId string, ckpt *Checkpoint, table string) error {
-	return mw.conn.Session.DB(mw.db).C(table).Update(bson.M{"shard_id": shardId}, *ckpt)
+	return mw.conn.Session.DB(mw.db).C(table).Update(bson.M{"ShardId": shardId}, *ckpt)
 }
 
 func (mw *MongoWriter) UpdateWithSet(shardId string, input map[string]interface{}, table string) error {
-	return mw.conn.Session.DB(mw.db).C(table).Update(bson.M{"shard_id": shardId}, bson.M{"$set": input})
+	return mw.conn.Session.DB(mw.db).C(table).Update(bson.M{"ShardId": shardId}, bson.M{"$set": input})
 }
 
 func (mw *MongoWriter) Query(shardId string, table string) (*Checkpoint, error) {
 	var res Checkpoint
-	err := mw.conn.Session.DB(mw.db).C(table).Find(bson.M{"shard_id": shardId}).One(&res)
+	err := mw.conn.Session.DB(mw.db).C(table).Find(bson.M{"ShardId": shardId}).One(&res)
 	return &res, err
 }
 

@@ -36,19 +36,19 @@ const (
 )
 
 type Checkpoint struct {
-	ShardId         string `bson:"shard_id" json:"shard_id"`           // shard id
-	FatherId        string `bson:"father_id" json:"father_id"`         // father id
-	SequenceNumber  string `bson:"seq_num" json:"seq_num"`             // checkpoint
-	Status          string `bson:"status" json:"status"`               // status
-	WorkerId        string `bson:"worker_id" json:"worker_id"`         // thread number
-	IteratorType    string `bson:"iterator_type" json:"iterator_type"` // "LATEST" or "AT_SEQUENCE_NUMBER"
-	ShardIt         string `bson:"shard_it" json:"shard_it"`           // only used when IteratorType == "LATEST"
-	UpdateTimestamp string `bson:"update_date" json:"update_date"`
+	ShardId         string `bson:"ShardId" json:"ShardId"`           // shard id
+	FatherId        string `bson:"FatherId" json:"FatherId"`         // father id
+	SequenceNumber  string `bson:"SeqNum" json:"SeqNum"`             // checkpoint
+	Status          string `bson:"Status" json:"Status"`               // status
+	WorkerId        string `bson:"WorkerId" json:"WorkerId"`         // thread number
+	IteratorType    string `bson:"IteratorType" json:"IteratorType"` // "LATEST" or "AT_SEQUENCE_NUMBER"
+	ShardIt         string `bson:"ShardIt" json:"ShardIt"`           // only used when IteratorType == "LATEST"
+	UpdateTimestamp string `bson:"UpdateDate" json:"UpdateDate"`
 }
 
 type Status struct {
-	Key   string `bson:"key" json:"key"`                   // key -> CheckpointStatusKey
-	Value string `bson:"status_value" json:"status_value"` // CheckpointStatusValueFullSync or CheckpointStatusValueIncrSync
+	Key   string `bson:"Key" json:"Key"`                   // key -> CheckpointStatusKey
+	Value string `bson:"StatusValue" json:"StatusValue"` // CheckpointStatusValueFullSync or CheckpointStatusValueIncrSync
 }
 
 /*---------------------------------------*/
