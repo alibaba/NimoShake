@@ -165,6 +165,12 @@ func sanitizeOptions() error {
 		conf.Options.CheckpointDb = fmt.Sprintf("%s-%s", conf.Options.Id, "checkpoint")
 	}
 
+	if conf.Options.TargetType == utils.TargetTypeAliyunDynamoProxy &&
+			(!conf.Options.IncreaseExecutorUpsert || !conf.Options.IncreaseExecutorInsertOnDupUpdate) {
+		return fmt.Errorf("increase.executor.upsert and increase.executor.insert_on_dup_update should be " +
+			"enable when target type is %v", utils.TargetTypeAliyunDynamoProxy)
+	}
+
 	return nil
 }
 

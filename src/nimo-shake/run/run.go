@@ -42,8 +42,9 @@ func Start() {
 		LOG.Crashf("create dynamodb stream session failed[%v]", err)
 	}
 
-	LOG.Info("create checkpoint writer")
-	ckptWriter := checkpoint.NewWriter(checkpoint.CheckpointWriterTypeMongo, conf.Options.CheckpointAddress, conf.Options.CheckpointDb)
+	LOG.Info("create checkpoint writer: type=%v", checkpoint.CheckpointWriterTypeFile)
+	ckptWriter := checkpoint.NewWriter(checkpoint.CheckpointWriterTypeFile, conf.Options.CheckpointAddress,
+		conf.Options.CheckpointDb)
 
 	LOG.Info("check checkpoint")
 	var skipFull bool

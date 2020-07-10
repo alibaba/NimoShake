@@ -110,7 +110,7 @@ func (fw *FileWriter) ExtractCheckpoint() (map[string]map[string]*Checkpoint, er
 	err := filepath.Walk(fw.dir, func(path string, info os.FileInfo, err error) error {
 		if path != fw.dir {
 			pathList := strings.Split(path, "/")
-			fileList = append(fileList, pathList[len(pathList) - 1])
+			fileList = append(fileList, pathList[len(pathList)-1])
 		}
 		return nil
 	})
@@ -353,7 +353,7 @@ func (fw *FileWriter) readJsonList(f *os.File) ([]*Checkpoint, error) {
 
 	byteList := bytes.Split(byteValue, []byte{10})
 	ret := make([]*Checkpoint, 0, len(byteList))
-	for i := 0; i < len(byteList) - 1; i++ {
+	for i := 0; i < len(byteList)-1; i++ {
 		var ele Checkpoint
 		if err := json.Unmarshal(byteList[i], &ele); err != nil {
 			return nil, err

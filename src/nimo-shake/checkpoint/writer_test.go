@@ -9,9 +9,9 @@ import (
 )
 
 const (
-	TestMongoAddress          = "mongodb://100.81.164.186:31883"
-	TestCheckpointDb          = "test_checkpoint_db"
-	TestCheckpointTable          = "test_checkpoint_table"
+	TestMongoAddress    = "mongodb://100.81.164.186:31883"
+	TestCheckpointDb    = "test_checkpoint_db"
+	TestCheckpointTable = "test_checkpoint_table"
 )
 
 func TestStatus(t *testing.T) {
@@ -86,9 +86,9 @@ func TestCheckpointCRUD(t *testing.T) {
 		assert.Equal(t, nil, err, "should be equal")
 
 		cpkt := &Checkpoint{
-			ShardId: "test_id",
+			ShardId:  "test_id",
 			FatherId: "test_father",
-			Status: StatusNotProcess,
+			Status:   StatusNotProcess,
 		}
 
 		err = mongoWriter.Update("test_id", cpkt, TestCheckpointTable)
@@ -129,9 +129,9 @@ func TestCheckpointCRUD(t *testing.T) {
 		assert.Equal(t, nil, err, "should be equal")
 
 		cpkt := &Checkpoint{
-			ShardId: "test_id",
+			ShardId:  "test_id",
 			FatherId: "test_father",
-			Status: StatusNotProcess,
+			Status:   StatusNotProcess,
 		}
 
 		err = fileWriter.Update("test_id", cpkt, TestCheckpointTable)
@@ -187,31 +187,31 @@ func TestExtractCheckpoint(t *testing.T) {
 
 		err = mongoWriter.Insert(&Checkpoint{
 			ShardId: "id1",
-			Status: StatusNotProcess,
+			Status:  StatusNotProcess,
 		}, "table1")
 		assert.Equal(t, nil, err, "should be equal")
 
 		err = mongoWriter.Insert(&Checkpoint{
 			ShardId: "id2",
-			Status: StatusInProcessing,
+			Status:  StatusInProcessing,
 		}, "table1")
 		assert.Equal(t, nil, err, "should be equal")
 
 		err = mongoWriter.Insert(&Checkpoint{
 			ShardId: "id3",
-			Status: StatusPrepareProcess,
+			Status:  StatusPrepareProcess,
 		}, "table1")
 		assert.Equal(t, nil, err, "should be equal")
 
 		err = mongoWriter.Insert(&Checkpoint{
 			ShardId: "id1",
-			Status: StatusDone,
+			Status:  StatusDone,
 		}, "table2")
 		assert.Equal(t, nil, err, "should be equal")
 
 		err = mongoWriter.Insert(&Checkpoint{
 			ShardId: "id10",
-			Status: StatusWaitFather,
+			Status:  StatusWaitFather,
 		}, "table2")
 		assert.Equal(t, nil, err, "should be equal")
 
@@ -237,31 +237,31 @@ func TestExtractCheckpoint(t *testing.T) {
 
 		err = fileWriter.Insert(&Checkpoint{
 			ShardId: "id1",
-			Status: StatusNotProcess,
+			Status:  StatusNotProcess,
 		}, "table1")
 		assert.Equal(t, nil, err, "should be equal")
 
 		err = fileWriter.Insert(&Checkpoint{
 			ShardId: "id2",
-			Status: StatusInProcessing,
+			Status:  StatusInProcessing,
 		}, "table1")
 		assert.Equal(t, nil, err, "should be equal")
 
 		err = fileWriter.Insert(&Checkpoint{
 			ShardId: "id3",
-			Status: StatusPrepareProcess,
+			Status:  StatusPrepareProcess,
 		}, "table1")
 		assert.Equal(t, nil, err, "should be equal")
 
 		err = fileWriter.Insert(&Checkpoint{
 			ShardId: "id1",
-			Status: StatusDone,
+			Status:  StatusDone,
 		}, "table2")
 		assert.Equal(t, nil, err, "should be equal")
 
 		err = fileWriter.Insert(&Checkpoint{
 			ShardId: "id10",
-			Status: StatusWaitFather,
+			Status:  StatusWaitFather,
 		}, "table2")
 		assert.Equal(t, nil, err, "should be equal")
 

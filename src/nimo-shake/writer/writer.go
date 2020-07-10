@@ -9,11 +9,11 @@ import (
 
 type Writer interface{
 	// create table
-	CreateTable(ns utils.NS, tableDescribe *dynamodb.TableDescription) error
+	CreateTable(tableDescribe *dynamodb.TableDescription) error
+	// drop table
+	DropTable() error
 	// write bulk data
 	WriteBulk(input []interface{}) error
-	// create index
-	CreateIndex(tableDescribe *dynamodb.TableDescription) error
 	// insert
 	Insert(input []interface{}, index []interface{}) error
 	// delete

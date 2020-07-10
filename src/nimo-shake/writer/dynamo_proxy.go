@@ -10,6 +10,7 @@ import (
 	LOG "github.com/vinllen/log4go"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"fmt"
+	"bytes"
 )
 
 type DynamoProxyWriter struct {
@@ -20,6 +21,7 @@ type DynamoProxyWriter struct {
 
 func NewDynamoProxyWriter(name, address string, ns utils.NS, logLevel string) *DynamoProxyWriter {
 	config := &aws.Config{
+		Region:     aws.String("us-east-2"), // meaningless
 		Endpoint:   aws.String(address),
 		MaxRetries: aws.Int(3),
 		HTTPClient: &http.Client{
@@ -28,7 +30,7 @@ func NewDynamoProxyWriter(name, address string, ns utils.NS, logLevel string) *D
 	}
 
 	var err error
-	session, err := session.NewSession(config)
+	sess, err := session.NewSession(config)
 	if err != nil {
 		LOG.Crashf("create dynamo connection error[%v]", err)
 		return nil
@@ -36,9 +38,9 @@ func NewDynamoProxyWriter(name, address string, ns utils.NS, logLevel string) *D
 
 	var svc *dynamodb.DynamoDB
 	if logLevel == "debug" {
-		svc = dynamodb.New(session, aws.NewConfig().WithLogLevel(aws.LogDebugWithHTTPBody))
+		svc = dynamodb.New(sess, aws.NewConfig().WithLogLevel(aws.LogDebugWithHTTPBody))
 	} else {
-		svc = dynamodb.New(session)
+		svc = dynamodb.New(sess)
 	}
 
 	return &DynamoProxyWriter{
@@ -48,11 +50,15 @@ func NewDynamoProxyWriter(name, address string, ns utils.NS, logLevel string) *D
 	}
 }
 
-func (dpw *DynamoProxyWriter) CreateTable(ns utils.NS, tableDescribe *dynamodb.TableDescription) error {
+func (dpw *DynamoProxyWriter) String() string {
+	return dpw.Name
+}
+
+func (dpw *DynamoProxyWriter) CreateTable(tableDescribe *dynamodb.TableDescription) error {
 	_, err := dpw.svc.CreateTable(&dynamodb.CreateTableInput{
 		AttributeDefinitions: tableDescribe.AttributeDefinitions,
-		KeySchema: tableDescribe.KeySchema,
-		TableName: tableDescribe.TableName,
+		KeySchema:            tableDescribe.KeySchema,
+		TableName:            tableDescribe.TableName,
 	})
 	if err != nil {
 		LOG.Error("create table[%v] fail: %v", tableDescribe.TableName, err)
@@ -79,14 +85,17 @@ func (dpw *DynamoProxyWriter) CreateTable(ns utils.NS, tableDescribe *dynamodb.T
 	// check with retry 5 times and 1s gap
 	ok := utils.CallbackRetry(5, 1000, checkReady)
 	if !ok {
-		return fmt.Errorf("create table[%v] fail: check ready fail")
+		return fmt.Errorf("create table[%v] fail: check ready fail", dpw.ns.Collection)
 	}
 
 	return nil
 }
 
-func (dpw *DynamoProxyWriter) String() string {
-	return dpw.Name
+func (dpw *DynamoProxyWriter) DropTable() error {
+	_, err := dpw.svc.DeleteTable(&dynamodb.DeleteTableInput{
+		TableName: aws.String(dpw.ns.Collection),
+	})
+	return err
 }
 
 func (dpw *DynamoProxyWriter) WriteBulk(input []interface{}) error {
@@ -105,16 +114,11 @@ func (dpw *DynamoProxyWriter) WriteBulk(input []interface{}) error {
 	}
 
 	_, err := dpw.svc.BatchWriteItem(&dynamodb.BatchWriteItemInput{
-		RequestItems: map[string][]*dynamodb.WriteRequest {
+		RequestItems: map[string][]*dynamodb.WriteRequest{
 			dpw.ns.Collection: request,
 		},
 	})
 	return err
-}
-
-// do nothing
-func (dpw *DynamoProxyWriter) CreateIndex(tableDescribe *dynamodb.TableDescription) error {
-	return nil
 }
 
 func (dpw *DynamoProxyWriter) Close() {
@@ -128,7 +132,7 @@ func (dpw *DynamoProxyWriter) Insert(input []interface{}, index []interface{}) e
 	}
 
 	request := make([]*dynamodb.WriteRequest, len(index))
-	for i, ele := range index {
+	for i, ele := range input {
 		request[i] = &dynamodb.WriteRequest{
 			PutRequest: &dynamodb.PutRequest{
 				Item: ele.(map[string]*dynamodb.AttributeValue),
@@ -137,12 +141,12 @@ func (dpw *DynamoProxyWriter) Insert(input []interface{}, index []interface{}) e
 	}
 
 	_, err := dpw.svc.BatchWriteItem(&dynamodb.BatchWriteItemInput{
-		RequestItems: map[string][]*dynamodb.WriteRequest {
+		RequestItems: map[string][]*dynamodb.WriteRequest{
 			dpw.ns.Collection: request,
 		},
 	})
 
-	if utils.DynamoIgnoreError(err, "i", true) {
+	if err != nil && utils.DynamoIgnoreError(err, "i", true) {
 		LOG.Warn("%s ignore error[%v] when insert", dpw, err)
 		return nil
 	}
@@ -165,7 +169,7 @@ func (dpw *DynamoProxyWriter) Delete(index []interface{}) error {
 	}
 
 	_, err := dpw.svc.BatchWriteItem(&dynamodb.BatchWriteItemInput{
-		RequestItems: map[string][]*dynamodb.WriteRequest {
+		RequestItems: map[string][]*dynamodb.WriteRequest{
 			dpw.ns.Collection: request,
 		},
 	})
@@ -178,30 +182,49 @@ func (dpw *DynamoProxyWriter) Delete(index []interface{}) error {
 	return err
 }
 
+// upsert
 func (dpw *DynamoProxyWriter) Update(input []interface{}, index []interface{}) error {
 	if len(input) == 0 {
 		return nil
 	}
 
-	request := make([]*dynamodb.WriteRequest, len(index))
-	for i, ele := range index {
-		request[i] = &dynamodb.WriteRequest{
-			PutRequest: &dynamodb.PutRequest{
-				Item: ele.(map[string]*dynamodb.AttributeValue),
-			},
+	// fmt.Println(input, index)
+
+	for i := range input {
+		val := input[i].(map[string]*dynamodb.AttributeValue)
+		key := index[i].(map[string]*dynamodb.AttributeValue)
+
+		// why no update interface like BatchWriteItem !!!!
+		// generate new map(expression-attribute-values) and expression(update-expression)
+		newMap := make(map[string]*dynamodb.AttributeValue, len(val))
+		expressionBuffer := new(bytes.Buffer)
+		expressionBuffer.WriteString("SET")
+		cnt := 1
+		for k, v := range val {
+			newKey := fmt.Sprintf(":v%d", cnt)
+			newMap[newKey] = v
+
+			if cnt == 1 {
+				expressionBuffer.WriteString(fmt.Sprintf(" %s=%s", k, newKey))
+			} else {
+				expressionBuffer.WriteString(fmt.Sprintf(",%s=%s", k, newKey))
+			}
+
+			cnt++
+		}
+
+		// fmt.Println(newMap)
+		_, err := dpw.svc.UpdateItem(&dynamodb.UpdateItemInput{
+			TableName:                 aws.String(dpw.ns.Collection),
+			Key:                       key,
+			UpdateExpression:          aws.String(expressionBuffer.String()),
+			ExpressionAttributeValues: newMap,
+		})
+		if err != nil && utils.DynamoIgnoreError(err, "u", true) {
+			LOG.Warn("%s ignore error[%v] when insert", dpw, err)
+			return nil
 		}
 	}
 
-	_, err := dpw.svc.BatchWriteItem(&dynamodb.BatchWriteItemInput{
-		RequestItems: map[string][]*dynamodb.WriteRequest {
-			dpw.ns.Collection: request,
-		},
-	})
-
-	if utils.DynamoIgnoreError(err, "u", true) {
-		LOG.Warn("%s ignore error[%v] when insert", dpw, err)
-		return nil
-	}
-
-	return err
+	return nil
 }

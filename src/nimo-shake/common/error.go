@@ -7,6 +7,10 @@ import (
 // true means error can be ignored
 // https://github.com/mongodb/mongo/blob/master/src/mongo/base/error_codes.yml
 func MongodbIgnoreError(err error, op string, isFullSyncStage bool) bool {
+	if err == nil {
+		return true
+	}
+
 	errorCode := mgo.ErrorCodeList(err)
 	if err != nil && len(errorCode) == 0 {
 		return false
@@ -39,6 +43,10 @@ func MongodbIgnoreError(err error, op string, isFullSyncStage bool) bool {
 }
 
 func DynamoIgnoreError(err error, op string, isFullSyncStage bool) bool {
+	if err == nil {
+		return true
+	}
+
 	switch op {
 	case "i":
 	case "u":

@@ -41,29 +41,7 @@ func (mw *MongoWriter) String() string {
 	return mw.Name
 }
 
-func (mw *MongoWriter) CreateTable(ns utils.NS, tableDescribe *dynamodb.TableDescription) error {
-	// do nothing for mongo
-	return nil
-}
-
-func (mw *MongoWriter) WriteBulk(input []interface{}) error {
-	if len(input) == 0 {
-		return nil
-	}
-
-	docList := make([]interface{}, 0, len(input))
-	for _, ele := range input {
-		docList = append(docList, ele.(protocal.RawData).Data)
-	}
-
-	if err := mw.conn.Session.DB(mw.ns.Database).C(mw.ns.Collection).Insert(docList...); err != nil {
-		return fmt.Errorf("%s insert docs with length[%v] into ns[%s] of dest mongo failed[%v]. first doc: %v",
-			mw, len(docList), mw.ns, err, docList[0])
-	}
-	return nil
-}
-
-func (mw *MongoWriter) CreateIndex(tableDescribe *dynamodb.TableDescription) error {
+func (mw *MongoWriter) CreateTable(tableDescribe *dynamodb.TableDescription) error {
 	// parse primary key with sort key
 	allIndexes := tableDescribe.AttributeDefinitions
 	primaryIndexes := tableDescribe.KeySchema
@@ -103,6 +81,31 @@ func (mw *MongoWriter) CreateIndex(tableDescribe *dynamodb.TableDescription) err
 	return nil
 }
 
+func (mw *MongoWriter) DropTable() error {
+	err := mw.conn.Session.DB(mw.ns.Database).C(mw.ns.Collection).DropCollection()
+	if err != nil && err.Error() == utils.NsNotFountErr {
+		return nil
+	}
+	return err
+}
+
+func (mw *MongoWriter) WriteBulk(input []interface{}) error {
+	if len(input) == 0 {
+		return nil
+	}
+
+	docList := make([]interface{}, 0, len(input))
+	for _, ele := range input {
+		docList = append(docList, ele.(protocal.RawData).Data)
+	}
+
+	if err := mw.conn.Session.DB(mw.ns.Database).C(mw.ns.Collection).Insert(docList...); err != nil {
+		return fmt.Errorf("%s insert docs with length[%v] into ns[%s] of dest mongo failed[%v]. first doc: %v",
+			mw, len(docList), mw.ns, err, docList[0])
+	}
+	return nil
+}
+
 func (mw *MongoWriter) Close() {
 	mw.conn.Close()
 }
@@ -133,13 +136,14 @@ func (mw *MongoWriter) Insert(input []interface{}, index []interface{}) error {
 func (mw *MongoWriter) updateOnInsert(input []interface{}, index []interface{}) error {
 	// upsert one by one
 	for i := range input {
+		LOG.Debug("upsert: selector[%v] update[%v]", index[i], input[i])
 		_, err := mw.conn.Session.DB(mw.ns.Database).C(mw.ns.Collection).Upsert(index[i], input[i])
-		if utils.MongodbIgnoreError(err, "u", false) {
-			LOG.Warn("%s ignore error[%v] when upsert", mw, err)
-			return nil
-		}
-
 		if err != nil {
+			if utils.MongodbIgnoreError(err, "u", false) {
+				LOG.Warn("%s ignore error[%v] when upsert", mw, err)
+				return nil
+			}
+
 			return err
 		}
 	}
@@ -152,8 +156,9 @@ func (mw *MongoWriter) Delete(index []interface{}) error {
 	bulk.Remove(index...)
 
 	if _, err := bulk.Run(); err != nil {
-		if utils.MongodbIgnoreError(err, "i", false) {
-			LOG.Warn("%s ignore error[%v] when insert", mw, err)
+		LOG.Warn(err)
+		if utils.MongodbIgnoreError(err, "d", false) {
+			LOG.Warn("%s ignore error[%v] when delete", mw, err)
 			return nil
 		}
 
@@ -164,16 +169,21 @@ func (mw *MongoWriter) Delete(index []interface{}) error {
 }
 
 func (mw *MongoWriter) Update(input []interface{}, index []interface{}) error {
-	updates := make([]interface{}, 0, len(input) * 2)
+	updates := make([]interface{}, 0, len(input)*2)
 	for i := range input {
 		updates = append(updates, index[i])
 		updates = append(updates, input[i])
 	}
 
 	bulk := mw.conn.Session.DB(mw.ns.Database).C(mw.ns.Collection).Bulk()
-	bulk.Update(updates...)
+	if conf.Options.IncreaseExecutorUpsert {
+		bulk.Upsert(updates...)
+	} else {
+		bulk.Update(updates...)
+	}
 
 	if _, err := bulk.Run(); err != nil {
+		LOG.Warn(err)
 		// parse error
 		idx, _, _ := utils.FindFirstErrorIndexAndMessage(err.Error())
 		if idx == -1 {
@@ -181,11 +191,11 @@ func (mw *MongoWriter) Update(input []interface{}, index []interface{}) error {
 		}
 
 		if utils.MongodbIgnoreError(err, "u", false) {
-			return mw.updateOnInsert(input[idx: ], index[idx: ])
+			return mw.updateOnInsert(input[idx:], index[idx:])
 		}
 
 		if mgo.IsDup(err) {
-			return mw.updateOnInsert(input[idx + 1: ], index[idx + 1: ])
+			return mw.updateOnInsert(input[idx+1:], index[idx+1:])
 		}
 		return err
 	}
@@ -236,17 +246,17 @@ func (mw *MongoWriter) createUserIndex(globalSecondaryIndexes []*dynamodb.Global
 }
 
 func (mw *MongoWriter) createSingleIndex(primaryIndexes []*dynamodb.KeySchemaElement, parseMap map[string]string,
-		isPrimaryKey bool) (string, error) {
+	isPrimaryKey bool) (string, error) {
 	primaryKey, sortKey, err := utils.ParsePrimaryAndSortKey(primaryIndexes, parseMap)
 	if err != nil {
 		return "", fmt.Errorf("parse primary and sort key failed[%v]", err)
 	}
 
-	primaryKeyWithType := fmt.Sprintf("%s.%s", primaryKey, parseMap[primaryKey])
+	primaryKeyWithType := mw.fetchKey(primaryKey, parseMap[primaryKey])
 	indexList := make([]string, 0)
 	indexList = append(indexList, primaryKeyWithType)
 	if sortKey != "" {
-		indexList = append(indexList, fmt.Sprintf("%s.%s", sortKey, parseMap[sortKey]))
+		indexList = append(indexList, mw.fetchKey(sortKey, parseMap[sortKey]))
 	}
 
 	LOG.Info("ns[%s] single index[%v] list[%v]", mw.ns, primaryKeyWithType, indexList)
@@ -264,21 +274,35 @@ func (mw *MongoWriter) createSingleIndex(primaryIndexes []*dynamodb.KeySchemaEle
 		}
 	}
 
-	// create hash key only
-	if err := mw.conn.Session.DB(mw.ns.Database).Run(bson.D{
+	doc := bson.D{
 		{Name: "createIndexes", Value: mw.ns.Collection},
 		{Name: "indexes", Value: []bson.M{
 			{
-				"key": bson.M {
+				"key": bson.M{
 					primaryKeyWithType: "hashed",
 				},
-				"name": fmt.Sprintf("%s_%s", primaryKeyWithType, "hashed"),
+				"name":       fmt.Sprintf("%s_%s", primaryKeyWithType, "hashed"),
+				"background": true,
 			},
 		}},
-		{Name: "background", Value: true},
-	}, nil); err != nil {
-		return "", fmt.Errorf("create primary hash index failed[%v]", err)
+	}
+	LOG.Info("create index isPrimary[%v]: %v", isPrimaryKey, doc)
+	// create hash key only
+	if err := mw.conn.Session.DB(mw.ns.Database).Run(doc, nil); err != nil {
+		return "", fmt.Errorf("create primary[%v] hash index failed[%v]", isPrimaryKey, err)
 	}
 
 	return primaryKeyWithType, nil
+}
+
+func (mw *MongoWriter) fetchKey(key, tp string) string {
+	switch conf.Options.ConvertType {
+	case utils.ConvertTypeChange:
+		fallthrough
+	case utils.ConvertTypeSame:
+		return key
+	case utils.ConvertTypeRaw:
+		return fmt.Sprintf("%s.%s", key, tp)
+	}
+	return ""
 }

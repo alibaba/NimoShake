@@ -85,20 +85,10 @@ func (ts *tableSyncer) Sync() {
 		LOG.Crashf("%s create writer failed", ts)
 		return
 	}
-	// create table with description
-	if err := targetWriter.CreateTable(ts.ns, ts.sourceTableDescribe); err != nil {
+	// create table and index with description
+	if err := targetWriter.CreateTable(ts.sourceTableDescribe); err != nil {
 		LOG.Crashf("%s create table failed: %v", ts, err)
 		return
-	}
-
-	// start write index with background
-	if conf.Options.FullEnableIndexPrimary || conf.Options.FullEnableIndexUser {
-		// enable index
-		LOG.Info("%s try to write index", ts.String())
-		if err := targetWriter.CreateIndex(ts.sourceTableDescribe); err != nil {
-			LOG.Error("%s create index failed[%v]", ts.String(), err)
-		}
-		LOG.Info("%s finish syncing index", ts.String())
 	}
 
 	// start fetcher to fetch all data from DynamoDB

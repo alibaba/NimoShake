@@ -20,7 +20,8 @@ const (
 )
 
 var (
-	NotFountErr = "not found"
+	NotFountErr   = "not found"
+	NsNotFountErr = "ns not found"
 )
 
 type NS struct {
