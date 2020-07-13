@@ -21,7 +21,7 @@ type Fetcher struct {
 	table        string
 	stream       *dynamodbstreams.Stream
 	shardChan    chan *utils.ShardNode
-	ckptWriter checkpoint.Writer
+	ckptWriter   checkpoint.Writer
 }
 
 func NewFetcher(table string, stream *dynamodbstreams.Stream, shardChan chan *utils.ShardNode, ckptWriter checkpoint.Writer) *Fetcher {
@@ -37,7 +37,7 @@ func NewFetcher(table string, stream *dynamodbstreams.Stream, shardChan chan *ut
 		table:        table,
 		stream:       stream,
 		shardChan:    shardChan,
-		ckptWriter: ckptWriter,
+		ckptWriter:   ckptWriter,
 	}
 }
 
@@ -107,13 +107,13 @@ func (f *Fetcher) Run() {
 			if !ok {
 				// insert checkpoint
 				newCkpt := &checkpoint.Checkpoint{
-					ShardId:         id,
-					SequenceNumber:  *node.Shard.SequenceNumberRange.StartingSequenceNumber,
-					Status:          checkpoint.StatusPrepareProcess,
-					WorkerId:        "unknown",
-					FatherId:        father,
-					IteratorType:    checkpoint.IteratorTypeSequence,
-					UpdateTimestamp: "", // empty at first
+					ShardId:        id,
+					SequenceNumber: *node.Shard.SequenceNumberRange.StartingSequenceNumber,
+					Status:         checkpoint.StatusPrepareProcess,
+					WorkerId:       "unknown",
+					FatherId:       father,
+					IteratorType:   checkpoint.IteratorTypeSequence,
+					UpdateDate:     "", // empty at first
 				}
 				f.ckptWriter.Insert(newCkpt, f.table)
 				shardList = append(shardList, node)

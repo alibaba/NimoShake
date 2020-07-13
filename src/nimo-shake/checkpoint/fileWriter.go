@@ -83,7 +83,7 @@ func (fw *FileWriter) UpdateStatus(status string) error {
 
 	file := fmt.Sprintf("%s/%s", fw.dir, CheckpointStatusTable)
 	input := &Status{
-		Key:   "",
+		Key:   CheckpointStatusKey,
 		Value: status,
 	}
 
@@ -250,7 +250,8 @@ func (fw *FileWriter) UpdateWithSet(shardId string, input map[string]interface{}
 					v, _ := val.(string)
 					field.SetString(v)
 				case reflect.Invalid:
-					return fmt.Errorf("invalid field[%v]", key)
+					printData, _ := json.Marshal(data[i])
+					return fmt.Errorf("invalid field[%v], current checkpoint[%s]", key, printData)
 				}
 			}
 

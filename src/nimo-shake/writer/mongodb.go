@@ -48,6 +48,7 @@ func (mw *MongoWriter) CreateTable(tableDescribe *dynamodb.TableDescription) err
 	globalSecondaryIndexes := tableDescribe.GlobalSecondaryIndexes
 
 	mw.primaryIndexes = primaryIndexes
+	LOG.Info("%s table[%s] primary index length: %v", mw.String(), *tableDescribe.TableName, len(mw.primaryIndexes))
 
 	// parse index type
 	parseMap := utils.ParseIndexType(allIndexes)
@@ -99,7 +100,9 @@ func (mw *MongoWriter) WriteBulk(input []interface{}) error {
 	if err := mw.conn.Session.DB(mw.ns.Database).C(mw.ns.Collection).Insert(input...); err != nil {
 		if mgo.IsDup(err) {
 			LOG.Warn("%s duplicated document found. reinsert or update", mw)
-			if !conf.Options.FullExecutorInsertOnDupUpdate || mw.primaryIndexes == nil {
+			if !conf.Options.FullExecutorInsertOnDupUpdate || len(mw.primaryIndexes) == 0 {
+				LOG.Error("full.executor.insert_on_dup_update==[%v], primaryIndexes length[%v]", conf.Options.FullExecutorInsertOnDupUpdate,
+					len(mw.primaryIndexes))
 				return err
 			}
 
