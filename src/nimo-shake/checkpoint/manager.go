@@ -22,7 +22,7 @@ func CheckCkpt(ckptWriter Writer, dynamoStreams *dynamodbstreams.DynamoDBStreams
 	}
 	// need full sync if status != CheckpointStatusValueIncrSync which means last time sync isn't incr sync
 	if status != CheckpointStatusValueIncrSync {
-		LOG.Info("checkpoint status != %v, need full sync", CheckpointStatusValueIncrSync)
+		LOG.Info("checkpoint status[%v] != %v, need full sync", status, CheckpointStatusValueIncrSync)
 		return false, nil, nil
 	}
 
@@ -246,7 +246,7 @@ func PrepareFullSyncCkpt(ckptManager Writer, dynamoSession *dynamodb.DynamoDB,
 			streamMap[*stream.TableName] = stream
 
 			// traverse shard
-			LOG.Info("table[%v] not is checkpoint, try to insert", *stream.TableName)
+			LOG.Info("table[%v] isn't has checkpoint, try to insert", *stream.TableName)
 			rootNode := utils.BuildShardTree(describeStreamResult.StreamDescription.Shards, *stream.TableName,
 				*stream.StreamArn)
 
@@ -273,6 +273,7 @@ func PrepareFullSyncCkpt(ckptManager Writer, dynamoSession *dynamodb.DynamoDB,
 				if node.Shard.SequenceNumberRange.EndingSequenceNumber != nil {
 					// shard already closed
 					ckpt.Status = StatusNoNeedProcess
+					LOG.Info("insert table[%v] checkpoint[%v]: %v", *stream.TableName, *ckpt, ckpt.Status)
 					return ckptManager.Insert(ckpt, *stream.TableName)
 				} else {
 					ckpt.Status = StatusPrepareProcess
@@ -290,6 +291,7 @@ func PrepareFullSyncCkpt(ckptManager Writer, dynamoSession *dynamodb.DynamoDB,
 					// set shard iterator map which will be used in incr-sync
 					GlobalShardIteratorMap.Set(*node.Shard.ShardId, *outShardIt.ShardIterator)
 
+					LOG.Info("insert table[%v] checkpoint[%v]", *stream.TableName, *ckpt)
 					if err = ckptManager.Insert(ckpt, *stream.TableName); err != nil {
 						return fmt.Errorf("shard[%v] insert checkpoint failed[%v]", *node.Shard.ShardId, err)
 					}

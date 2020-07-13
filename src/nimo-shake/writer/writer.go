@@ -12,7 +12,7 @@ type Writer interface{
 	CreateTable(tableDescribe *dynamodb.TableDescription) error
 	// drop table
 	DropTable() error
-	// write bulk data
+	// write bulk data, used in full sync
 	WriteBulk(input []interface{}) error
 	// insert
 	Insert(input []interface{}, index []interface{}) error

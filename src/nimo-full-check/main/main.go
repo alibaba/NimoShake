@@ -99,7 +99,9 @@ func sanitizeOptions() error {
 		}
 	}
 
-	if conf.Opts.ConvertType != shakeUtils.ConvertTypeRaw && conf.Opts.ConvertType != shakeUtils.ConvertTypeChange {
+	if conf.Opts.ConvertType == "" {
+		conf.Opts.ConvertType = shakeUtils.ConvertTypeChange
+	} else if conf.Opts.ConvertType != shakeUtils.ConvertTypeRaw && conf.Opts.ConvertType != shakeUtils.ConvertTypeChange {
 		return fmt.Errorf("convertType[%v] illegal", conf.Opts.ConvertType)
 	}
 

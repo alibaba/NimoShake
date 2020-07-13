@@ -121,7 +121,7 @@ type Dispatcher struct {
 	shardIt             string // only used when checkpoint is empty
 	unitTestStr         string // used for UT only
 	close               bool   // is close?
-	ckptWriter checkpoint.Writer
+	ckptWriter          checkpoint.Writer
 }
 
 func NewDispatcher(id int, shard *utils.ShardNode, ckptWriter checkpoint.Writer) *Dispatcher {
@@ -158,7 +158,7 @@ func NewDispatcher(id int, shard *utils.ShardNode, ckptWriter checkpoint.Writer)
 		executorChan:        make(chan *ExecuteNode, DispatcherExecuterChanSize),
 		converter:           converter,
 		ns:                  ns,
-		ckptWriter: ckptWriter,
+		ckptWriter:          ckptWriter,
 	}
 
 	go d.batcher()
@@ -340,7 +340,7 @@ func (d *Dispatcher) batcher() {
 		}
 
 		if !ok || timeout {
-			if len(node.operate) != 0 {
+			if len(node.operate) != 0 || len(node.index) != 0 {
 				d.executorChan <- node
 				node = &ExecuteNode{
 					tp:      "",
@@ -360,7 +360,7 @@ func (d *Dispatcher) batcher() {
 
 		if *record.EventName != preEvent || batchNr >= BatcherNumber || batchSize >= BatcherSize {
 			// need split
-			if len(node.operate) != 0 {
+			if len(node.operate) != 0 || len(node.index) != 0 {
 				// preEvent != ""
 				d.executorChan <- node
 			}
@@ -381,7 +381,7 @@ func (d *Dispatcher) batcher() {
 			LOG.Crashf("%s convert parse[%v] failed[%v]", d.String(), record.Dynamodb.Keys, err)
 		}
 
-		// LOG.Info("cccc1 %v", index.Data)
+		// LOG.Info("~~~op[%v] data: %v", *record.EventName, record)
 
 		// batch into list
 		switch *record.EventName {
@@ -441,7 +441,7 @@ func (d *Dispatcher) batcher() {
 
 func (d *Dispatcher) executor() {
 	for node := range d.executorChan {
-		LOG.Info("%s try write data with length[%v]", d.String(), len(node.operate))
+		LOG.Info("%s try write data with length[%v], tp[%v]", d.String(), len(node.index), node.tp)
 		var err error
 		switch node.tp {
 		case EventInsert:

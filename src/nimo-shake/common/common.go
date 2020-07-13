@@ -54,7 +54,8 @@ func InitialLogger(logFile string, level string, logBuffer bool) bool {
 		}
 		fileLogger := LOG.NewFileLogWriter(fmt.Sprintf("logs/%s", logFile), true)
 		fileLogger.SetRotateDaily(true)
-		fileLogger.SetFormat("[%D %T] [%L] [%s] %M")
+		// fileLogger.SetFormat("[%D %T] [%L] [%s] %M")
+		fileLogger.SetFormat("[%D %T] [%L] %M")
 		fileLogger.SetRotateMaxBackup(7)
 		LOG.AddFilter("file", logLevel, fileLogger)
 	} else {

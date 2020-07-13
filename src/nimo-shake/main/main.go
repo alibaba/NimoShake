@@ -13,6 +13,7 @@ import (
 
 	LOG "github.com/vinllen/log4go"
 	"github.com/gugemichael/nimo4go"
+	"nimo-shake/checkpoint"
 )
 
 type Exit struct{ Code int }
@@ -132,6 +133,9 @@ func sanitizeOptions() error {
 	// always enable
 	conf.Options.FullEnableIndexPrimary = true
 
+	if conf.Options.ConvertType == "" {
+		conf.Options.ConvertType = utils.ConvertTypeChange
+	}
 	if conf.Options.ConvertType != utils.ConvertTypeRaw && conf.Options.ConvertType != utils.ConvertTypeChange {
 		return fmt.Errorf("convert.type[%v] illegal", conf.Options.ConvertType)
 	}
@@ -158,8 +162,16 @@ func sanitizeOptions() error {
 		conf.Options.ConvertType = utils.ConvertTypeSame
 	}
 
+	// checkpoint
+	if conf.Options.CheckpointType == "" {
+		conf.Options.CheckpointType = checkpoint.CheckpointWriterTypeFile
+	}
 	if conf.Options.CheckpointAddress == "" {
-		conf.Options.CheckpointAddress = conf.Options.TargetAddress
+		if conf.Options.TargetType == utils.TargetTypeMongo {
+			conf.Options.CheckpointAddress = conf.Options.TargetAddress
+		} else {
+			conf.Options.CheckpointAddress = "checkpoint"
+		}
 	}
 	if conf.Options.CheckpointDb == "" {
 		conf.Options.CheckpointDb = fmt.Sprintf("%s-%s", conf.Options.Id, "checkpoint")

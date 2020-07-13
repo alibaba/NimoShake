@@ -30,10 +30,12 @@ type Configuration struct {
 	FullDocumentParser                uint   `config:"full.document.parser"`
 	FullEnableIndexPrimary            bool   `config:"full.enable_index.primary"`
 	FullEnableIndexUser               bool   `config:"full.enable_index.user"`
+	FullExecutorInsertOnDupUpdate     bool   `config:"full.executor.insert_on_dup_update"`
 	ConvertType                       string `config:"convert.type"`
 	IncreaseConcurrency               uint   `config:"increase.concurrency"`
 	IncreaseExecutorInsertOnDupUpdate bool   `config:"increase.executor.insert_on_dup_update"`
 	IncreaseExecutorUpsert            bool   `config:"increase.executor.upsert"`
+	CheckpointType                    string `config:"checkpoint.type"`
 	CheckpointAddress                 string `config:"checkpoint.address"`
 	CheckpointDb                      string `config:"checkpoint.db"`
 

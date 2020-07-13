@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	// TestMongoAddress    = "mongodb://100.81.164.186:31883"
+	// TestMongoAddress = "mongodb://100.81.164.186:31883"
 	TestMongoAddress       = "mongodb://root:4053040Aa@s-uf652b3747d3f304-pub.mongodb.rds.aliyuncs.com:3717"
 	TestWriteDb            = "test_write_db"
 	TestWriteTable         = "test_write_table"
@@ -371,6 +371,112 @@ func TestMongo(t *testing.T) {
 				assert.Equal(t, i*1000, data[i-1]["data"], "should be equal")
 			} else {
 				assert.Equal(t, i*10000, data[i-1]["data"], "should be equal")
+			}
+		}
+	}
+
+	// test drop/create and bulk write
+	{
+		fmt.Printf("TestMongo case %d.\n", nr)
+		nr++
+
+		conf.Options.TargetMongoDBType = utils.TargetMongoDBTypeSharding
+		conf.Options.FullEnableIndexPrimary = true
+		conf.Options.FullEnableIndexUser = true
+		conf.Options.FullExecutorInsertOnDupUpdate = true
+		conf.Options.ConvertType = utils.ConvertTypeChange
+		conf.Options.IncreaseExecutorUpsert = true
+		conf.Options.IncreaseExecutorInsertOnDupUpdate = true
+
+		ns := utils.NS{Database: TestWriteDb, Collection: TestWriteTable}
+		mongoWriter := NewWriter(utils.TargetTypeMongo, TestMongoAddress, ns, "info")
+		assert.Equal(t, true, mongoWriter != nil, "should be equal")
+
+		// test connection
+		mongoTestConn, err := utils.NewMongoConn(TestMongoAddress, utils.ConnectModePrimary, true)
+		assert.Equal(t, nil, err, "should be equal")
+		defer mongoTestConn.Close()
+
+		// drop table
+		err = mongoWriter.DropTable()
+		assert.Equal(t, nil, err, "should be equal")
+
+		// create table with index
+		err = mongoWriter.CreateTable(&dynamodb.TableDescription{
+			AttributeDefinitions: []*dynamodb.AttributeDefinition{
+				{
+					AttributeName: aws.String("pid"),
+					AttributeType: aws.String("S"),
+				},
+				{
+					AttributeName: aws.String("sid"),
+					AttributeType: aws.String("N"),
+				},
+			},
+			TableName: aws.String(TestWriteTable),
+			KeySchema: []*dynamodb.KeySchemaElement{
+				{
+					AttributeName: aws.String("pid"),
+					KeyType:       aws.String("HASH"),
+				},
+				{
+					AttributeName: aws.String("sid"),
+					KeyType:       aws.String("RANGE"),
+				},
+			},
+		})
+		assert.Equal(t, nil, err, "should be equal")
+
+		/************************************************/
+		// CRUD
+
+		// insert 1-10
+		input := make([]interface{}, 0, 10)
+		for i := 1; i <= 10; i++ {
+			pidS := fmt.Sprintf("%d", i)
+			input = append(input, bson.M{
+				"pid":  pidS,
+				"sid":  i * 100,
+				"data": i,
+			})
+		}
+
+		err = mongoWriter.WriteBulk(input)
+		assert.Equal(t, nil, err, "should be equal")
+
+		// query count
+		cnt, err := mongoTestConn.Session.DB(TestWriteDb).C(TestWriteTable).Find(bson.M{}).Count()
+		assert.Equal(t, nil, err, "should be equal")
+		assert.Equal(t, 10, cnt, "should be equal")
+
+		input2 := make([]interface{}, 0, 10)
+		for i := 5; i <= 15; i++ {
+			pidS := fmt.Sprintf("%d", i)
+			input2 = append(input2, bson.M{
+				"pid":  pidS,
+				"sid":  i * 100,
+				"data": i * 100,
+			})
+		}
+
+		err = mongoWriter.WriteBulk(input2)
+		assert.Equal(t, nil, err, "should be equal")
+
+		// query count
+		cnt, err = mongoTestConn.Session.DB(TestWriteDb).C(TestWriteTable).Find(bson.M{}).Count()
+		assert.Equal(t, nil, err, "should be equal")
+		assert.Equal(t, 15, cnt, "should be equal")
+
+		// query
+		data := make([]bson.M, 0)
+		err = mongoTestConn.Session.DB(TestWriteDb).C(TestWriteTable).Find(bson.M{}).Sort("sid").All(&data)
+		assert.Equal(t, nil, err, "should be equal")
+
+		for i := 1; i <= 15; i++ {
+			if i < 5 {
+				assert.Equal(t, i, data[i-1]["data"], "should be equal")
+			} else {
+				assert.Equal(t, i*100, data[i-1]["data"], "should be equal")
 			}
 		}
 	}
@@ -766,7 +872,7 @@ func TestDynamo(t *testing.T) {
 			} else if sidValue <= 1100 {
 				dataValue, _ := strconv.Atoi(*ele["data"].N)
 				assert.Equal(t, true, exist, "should be equal")
-				assert.Equal(t, sidValue * 10, dataValue, "should be equal")
+				assert.Equal(t, sidValue*10, dataValue, "should be equal")
 			} else {
 				assert.Equal(t, true, exist, "should be equal")
 				assert.Equal(t, *ele["sid"].N, *data.N, "should be equal")
@@ -812,7 +918,7 @@ func TestDynamo(t *testing.T) {
 			} else if sidValue <= 1100 {
 				dataValue, _ := strconv.Atoi(*ele["data"].N)
 				assert.Equal(t, true, exist, "should be equal")
-				assert.Equal(t, sidValue * 10, dataValue, "should be equal")
+				assert.Equal(t, sidValue*10, dataValue, "should be equal")
 			} else {
 				assert.Equal(t, true, exist, "should be equal")
 				assert.Equal(t, *ele["sid"].N, *data.N, "should be equal")
@@ -871,11 +977,162 @@ func TestDynamo(t *testing.T) {
 			} else if sidValue <= 400 {
 				dataValue, _ := strconv.Atoi(*ele["data"].N)
 				assert.Equal(t, true, exist, "should be equal")
-				assert.Equal(t, sidValue * 10, dataValue, "should be equal")
+				assert.Equal(t, sidValue*10, dataValue, "should be equal")
 			} else {
 				dataValue, _ := strconv.Atoi(*ele["data"].N)
 				assert.Equal(t, true, exist, "should be equal")
-				assert.Equal(t, sidValue * 100, dataValue, "should be equal")
+				assert.Equal(t, sidValue*100, dataValue, "should be equal")
+			}
+		}
+	}
+
+	// test bulkWrite
+	{
+		{
+			fmt.Printf("TestDynamo case %d.\n", nr)
+			nr++
+
+			conf.Options.TargetMongoDBType = utils.TargetMongoDBTypeSharding
+			conf.Options.FullEnableIndexPrimary = true
+			conf.Options.FullEnableIndexUser = true
+			conf.Options.ConvertType = utils.ConvertTypeChange
+
+			ns := utils.NS{Database: TestWriteDb, Collection: TestWriteTable}
+			dynamoWriter := NewWriter(utils.TargetTypeAliyunDynamoProxy, TestDynamoProxyAddress, ns, "info")
+			assert.Equal(t, true, dynamoWriter != nil, "should be equal")
+
+			// test connection
+			config := &aws.Config{
+				Region:     aws.String("us-east-2"),
+				Endpoint:   aws.String(TestDynamoProxyAddress),
+				MaxRetries: aws.Int(3),
+				HTTPClient: &http.Client{
+					Timeout: time.Duration(5000) * time.Millisecond,
+				},
+			}
+
+			var err error
+			sess, err := session.NewSession(config)
+			assert.Equal(t, nil, err, "should be equal")
+			svc := dynamodb.New(sess, aws.NewConfig().WithLogLevel(aws.LogDebugWithHTTPBody))
+
+			// drop table
+			err = dynamoWriter.DropTable()
+			// assert.Equal(t, true, err != nil, "should be equal")
+
+			// check table exists
+			_, err = svc.DescribeTable(&dynamodb.DescribeTableInput{
+				TableName: aws.String(TestWriteTable),
+			})
+			assert.Equal(t, true, err != nil, "should be equal")
+			fmt.Println(err)
+
+			// create table with index
+			inputTable := &dynamodb.TableDescription{
+				AttributeDefinitions: []*dynamodb.AttributeDefinition{
+					{
+						AttributeName: aws.String("pid"),
+						AttributeType: aws.String("S"),
+					},
+					{
+						AttributeName: aws.String("sid"),
+						AttributeType: aws.String("N"),
+					},
+				},
+				TableName: aws.String(TestWriteTable),
+				KeySchema: []*dynamodb.KeySchemaElement{
+					{
+						AttributeName: aws.String("pid"),
+						KeyType:       aws.String("HASH"),
+					},
+					{
+						AttributeName: aws.String("sid"),
+						KeyType:       aws.String("RANGE"),
+					},
+				},
+			}
+			err = dynamoWriter.CreateTable(inputTable)
+			assert.Equal(t, nil, err, "should be equal")
+
+			// check table exists
+			out, err := svc.DescribeTable(&dynamodb.DescribeTableInput{
+				TableName: aws.String(TestWriteTable),
+			})
+			assert.Equal(t, nil, err, "should be equal")
+
+			fmt.Println(out)
+			// check equal
+			assert.Equal(t, inputTable.TableName, out.Table.TableName, "should be equal")
+			assert.Equal(t, inputTable.KeySchema, out.Table.KeySchema, "should be equal")
+			// assert.Equal(t, input.AttributeDefinitions, out.Table.AttributeDefinitions, "should be equal")
+
+			dynamoWriter.Close()
+
+			/************************************************/
+			// CRUD
+
+			// insert 1-10
+			input := make([]interface{}, 0, 10)
+			for i := 1; i <= 10; i++ {
+				pidS := fmt.Sprintf("%d", 1)
+				sidN := fmt.Sprintf("%d", i*100)
+				input = append(input, map[string]*dynamodb.AttributeValue{
+					"pid": {
+						S: aws.String(pidS),
+					},
+					"sid": {
+						N: aws.String(sidN),
+					},
+				})
+			}
+			// insert
+			err = dynamoWriter.WriteBulk(input)
+			assert.Equal(t, nil, err, "should be equal")
+
+			// insert 5-15
+			input2 := make([]interface{}, 0, 10)
+			for i := 5; i <= 15; i++ {
+				pidS := fmt.Sprintf("%d", 1)
+				sidN := fmt.Sprintf("%d", i*100)
+				dataN := fmt.Sprintf("%d", i*100)
+				input2 = append(input2, map[string]*dynamodb.AttributeValue{
+					"pid": {
+						S: aws.String(pidS),
+					},
+					"sid": {
+						N: aws.String(sidN),
+					},
+					"data": {
+						N: aws.String(dataN),
+					},
+				})
+			}
+			// insert
+			err = dynamoWriter.WriteBulk(input2)
+			assert.Equal(t, nil, err, "should be equal")
+
+			// query
+			output, err := svc.Query(&dynamodb.QueryInput{
+				TableName:              aws.String(TestWriteTable),
+				KeyConditionExpression: aws.String("pid=:v1"),
+				ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
+					":v1": {
+						S: aws.String("1"),
+					},
+				},
+			})
+			assert.Equal(t, nil, err, "should be equal")
+			assert.Equal(t, 15, int(*output.Count), "should be equal")
+			for i := range output.Items {
+				ele := output.Items[i]
+				data, exist := ele["data"]
+				sidValue, _ := strconv.Atoi(*ele["sid"].N)
+				if sidValue < 500 {
+					assert.Equal(t, false, exist, "should be equal")
+				} else {
+					assert.Equal(t, true, exist, "should be equal")
+					assert.Equal(t, *ele["sid"].N, *data.N, "should be equal")
+				}
 			}
 		}
 	}

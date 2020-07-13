@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	CheckpointWriterTypeMongo     = "mongo"
+	CheckpointWriterTypeMongo     = "mongodb"
 	CheckpointWriterTypeFile      = "file"
 	CheckpointStatusTable         = "status_table"
 	CheckpointStatusKey           = "status_key"
@@ -27,12 +27,12 @@ const (
 
 	StreamViewType = "NEW_AND_OLD_IMAGES"
 
-	FieldShardId      = "shard_id"
-	FieldShardIt      = "shard_it"
-	FieldStatus       = "status"
-	FieldSeqNum       = "seq_num"
-	FieldIteratorType = "iterator_type"
-	FieldTimestamp    = "update_date"
+	FieldShardId      = "ShardId"
+	FieldShardIt      = "ShardIt"
+	FieldStatus       = "Status"
+	FieldSeqNum       = "SeqNum"
+	FieldIteratorType = "IteratorType"
+	FieldTimestamp    = "UpdateDate"
 )
 
 type Checkpoint struct {

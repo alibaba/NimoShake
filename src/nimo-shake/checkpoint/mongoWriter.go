@@ -18,7 +18,7 @@ type MongoWriter struct {
 func NewMongoWriter(address, db string) *MongoWriter {
 	targetConn, err := utils.NewMongoConn(address, utils.ConnectModePrimary, true)
 	if err != nil {
-		LOG.Error("create mongodb connection error[%v]", err)
+		LOG.Error("create mongodb with address[%v] db[%v] connection error[%v]", address, db, err)
 		return nil
 	}
 

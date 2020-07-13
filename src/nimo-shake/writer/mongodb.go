@@ -8,7 +8,6 @@ import (
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/vinllen/mgo"
 	"github.com/vinllen/mgo/bson"
-	"nimo-shake/protocal"
 	"nimo-shake/configure"
 	"strings"
 )
@@ -18,9 +17,10 @@ const (
 )
 
 type MongoWriter struct {
-	Name string
-	ns   utils.NS
-	conn *utils.MongoConn
+	Name           string
+	ns             utils.NS
+	conn           *utils.MongoConn
+	primaryIndexes []*dynamodb.KeySchemaElement
 }
 
 func NewMongoWriter(name, address string, ns utils.NS) *MongoWriter {
@@ -46,6 +46,8 @@ func (mw *MongoWriter) CreateTable(tableDescribe *dynamodb.TableDescription) err
 	allIndexes := tableDescribe.AttributeDefinitions
 	primaryIndexes := tableDescribe.KeySchema
 	globalSecondaryIndexes := tableDescribe.GlobalSecondaryIndexes
+
+	mw.primaryIndexes = primaryIndexes
 
 	// parse index type
 	parseMap := utils.ParseIndexType(allIndexes)
@@ -94,14 +96,37 @@ func (mw *MongoWriter) WriteBulk(input []interface{}) error {
 		return nil
 	}
 
-	docList := make([]interface{}, 0, len(input))
-	for _, ele := range input {
-		docList = append(docList, ele.(protocal.RawData).Data)
-	}
+	if err := mw.conn.Session.DB(mw.ns.Database).C(mw.ns.Collection).Insert(input...); err != nil {
+		if mgo.IsDup(err) {
+			LOG.Warn("%s duplicated document found. reinsert or update", mw)
+			if !conf.Options.FullExecutorInsertOnDupUpdate || mw.primaryIndexes == nil {
+				return err
+			}
 
-	if err := mw.conn.Session.DB(mw.ns.Database).C(mw.ns.Collection).Insert(docList...); err != nil {
+			// 1. generate index list
+			indexList := make([]interface{}, len(input))
+			for i, ele := range input {
+				inputData := ele.(bson.M)
+				index := make(bson.M, len(mw.primaryIndexes))
+				for _, primaryIndex := range mw.primaryIndexes {
+					// currently, we only support convert type == 'convert', so there is no type inside
+					key := *primaryIndex.AttributeName
+					if _, ok := inputData[key]; !ok {
+						LOG.Error("primary key[%v] is not exists on input data[%v]",
+							*primaryIndex.AttributeName, inputData)
+					} else {
+						index[key] = inputData[key]
+					}
+				}
+				indexList[i] = index
+			}
+
+			LOG.Debug(indexList)
+
+			return mw.updateOnInsert(input, indexList)
+		}
 		return fmt.Errorf("%s insert docs with length[%v] into ns[%s] of dest mongo failed[%v]. first doc: %v",
-			mw, len(docList), mw.ns, err, docList[0])
+			mw, len(input), mw.ns, err, input[0])
 	}
 	return nil
 }

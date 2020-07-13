@@ -33,7 +33,7 @@ type DocumentChecker struct {
 	sourceConn         *dynamodb.DynamoDB
 	mongoClient        *shakeUtils.MongoConn
 	fetcherChan        chan *dynamodb.ScanOutput // chan between fetcher and parser
-	parserChan         chan protocal.MongoData   // chan between parser and writer
+	parserChan         chan protocal.RawData   // chan between parser and writer
 	converter          protocal.Converter        // converter
 	sampler            *Sample                   // use to sample
 	primaryKeyWithType KeyUnion
@@ -79,7 +79,7 @@ func (dc *DocumentChecker) Run() {
 	LOG.Info("%s check outline finish, starts checking details", dc.String())
 
 	dc.fetcherChan = make(chan *dynamodb.ScanOutput, fetcherChanSize)
-	dc.parserChan = make(chan protocal.MongoData, parserChanSize)
+	dc.parserChan = make(chan protocal.RawData, parserChanSize)
 
 	// start fetcher to fetch all data from DynamoDB
 	go dc.fetcher()
@@ -149,7 +149,7 @@ func (dc *DocumentChecker) parser() {
 				continue
 			}
 
-			dc.parserChan <- out
+			dc.parserChan <- out.(protocal.RawData)
 		}
 	}
 
@@ -178,12 +178,21 @@ func (dc *DocumentChecker) executor() {
 		if dc.primaryKeyWithType.name != "" && dc.sortKeyWithType.name != "" {
 			// find by union key
 			query = make(bson.M, 0)
-			query[dc.primaryKeyWithType.union] = data.Data.(bson.M)[dc.primaryKeyWithType.name].(bson.M)[dc.primaryKeyWithType.tp]
-			query[dc.sortKeyWithType.union] = data.Data.(bson.M)[dc.sortKeyWithType.name].(bson.M)[dc.sortKeyWithType.tp]
+			if conf.Opts.ConvertType == shakeUtils.ConvertTypeRaw {
+				query[dc.primaryKeyWithType.union] = data.Data.(bson.M)[dc.primaryKeyWithType.name].(bson.M)[dc.primaryKeyWithType.tp]
+				query[dc.sortKeyWithType.union] = data.Data.(bson.M)[dc.sortKeyWithType.name].(bson.M)[dc.sortKeyWithType.tp]
+			} else if conf.Opts.ConvertType == shakeUtils.ConvertTypeChange {
+				query[dc.primaryKeyWithType.name] = data.Data.(bson.M)[dc.primaryKeyWithType.name]
+				query[dc.sortKeyWithType.name] = data.Data.(bson.M)[dc.sortKeyWithType.name]
+			} else {
+				LOG.Crashf("unknown convert type[%v]", conf.Opts.ConvertType)
+			}
 		} else {
 			// find by whole doc
 			query = data.Data.(bson.M)
 		}
+
+		LOG.Info("query: %v", query)
 
 		// query
 		var output bson.M

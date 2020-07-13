@@ -81,7 +81,7 @@ func (ds *documentSyncer) Run() {
 		switch v := data.(type) {
 		case protocal.RawData:
 			if v.Size > 0 {
-				batchGroup = append(batchGroup, data)
+				batchGroup = append(batchGroup, v.Data)
 				batchGroupSize += v.Size
 			}
 		}
