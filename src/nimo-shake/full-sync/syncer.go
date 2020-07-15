@@ -7,14 +7,17 @@ import (
 
 	"nimo-shake/common"
 	"nimo-shake/configure"
+	"nimo-shake/filter"
+	"nimo-shake/writer"
 
 	LOG "github.com/vinllen/log4go"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/vinllen/mgo/bson"
-	"nimo-shake/filter"
+	"github.com/vinllen/mgo"
+	"github.com/aws/aws-sdk-go/aws"
 )
 
-func Start(dynamoSession *dynamodb.DynamoDB) {
+func Start(dynamoSession *dynamodb.DynamoDB, w writer.Writer) {
 	// fetch all tables
 	LOG.Info("start fetching table list")
 	tableList, err := utils.FetchTableList(dynamoSession)
@@ -25,7 +28,7 @@ func Start(dynamoSession *dynamodb.DynamoDB) {
 
 	tableList = filter.FilterList(tableList)
 
-	if err := checkTableExists(tableList); err != nil {
+	if err := checkTableExists(tableList, w); err != nil {
 		LOG.Crashf("check table exists failed[%v]", err)
 		return
 	}
@@ -69,17 +72,14 @@ func Start(dynamoSession *dynamodb.DynamoDB) {
 	LOG.Info("finish syncing all tables and indexes!")
 }
 
-func checkTableExists(tableList []string) error {
-	if conf.Options.TargetType == utils.TargetTypeMongo {
-		LOG.Info("target.mongodb.exist is set[%v]", conf.Options.TargetMongoDBExist)
-
-		mongoClient, err := utils.NewMongoConn(conf.Options.TargetAddress, utils.ConnectModePrimary, true)
-		if err != nil {
-			return fmt.Errorf("create mongodb session error[%v]", err)
-		}
+func checkTableExists(tableList []string, w writer.Writer) error {
+	LOG.Info("target.db.exist is set[%v]", conf.Options.TargetDBExist)
+	switch conf.Options.TargetType {
+	case utils.TargetTypeMongo:
+		sess := w.GetSession().(*mgo.Session)
 
 		now := time.Now().Format(utils.GolangSecurityTime)
-		collections, err := mongoClient.Session.DB(conf.Options.Id).CollectionNames()
+		collections, err := sess.DB(conf.Options.Id).CollectionNames()
 		if err != nil {
 			return fmt.Errorf("get target collection names error[%v]", err)
 		}
@@ -90,14 +90,14 @@ func checkTableExists(tableList []string) error {
 			if _, ok := collectionsMp[table]; ok {
 				// exist
 				LOG.Info("table[%v] exists", table)
-				if conf.Options.TargetMongoDBExist == utils.TargetMongoDBExistDrop {
-					if err := mongoClient.Session.DB(conf.Options.Id).C(table).DropCollection(); err != nil {
+				if conf.Options.TargetDBExist == utils.TargetDBExistDrop {
+					if err := sess.DB(conf.Options.Id).C(table).DropCollection(); err != nil {
 						return fmt.Errorf("drop target collection[%v] failed[%v]", table, err)
 					}
-				} else if conf.Options.TargetMongoDBExist == utils.TargetMongoDBExistRename {
+				} else if conf.Options.TargetDBExist == utils.TargetDBExistRename {
 					fromCollection := fmt.Sprintf("%s.%s", conf.Options.Id, table)
 					toCollection := fmt.Sprintf("%s.%s_%v", conf.Options.Id, table, now)
-					if err := mongoClient.Session.DB("admin").Run(bson.D{
+					if err := sess.DB("admin").Run(bson.D{
 						bson.DocElem{"renameCollection", fromCollection},
 						bson.DocElem{"to", toCollection},
 						bson.DocElem{"dropTarget", false},
@@ -109,8 +109,71 @@ func checkTableExists(tableList []string) error {
 				}
 			}
 		}
-		LOG.Info("finish handling table exists")
+	case utils.TargetTypeAliyunDynamoProxy:
+		sess := w.GetSession().(*dynamodb.DynamoDB)
+
+		// query table list
+		collections := make([]string, 0, 16)
+
+		// dynamo-proxy is not support Limit and ExclusiveStartTableName
+		/*lastTableName := aws.String("")
+		var count int64 = 100
+		for i := 0; ; i++ {
+			LOG.Debug("list table round[%v]", i)
+			var input *dynamodb.ListTablesInput
+			if i == 0 {
+				input = &dynamodb.ListTablesInput{
+					Limit: aws.Int64(count),
+				}
+			} else {
+				input = &dynamodb.ListTablesInput{
+					ExclusiveStartTableName: lastTableName,
+					Limit: aws.Int64(count),
+				}
+			}
+			out, err := sess.ListTables(input)
+			if err != nil {
+				return fmt.Errorf("list table failed: %v", err)
+			}
+
+			for _, collection := range out.TableNames {
+				collections = append(collections, *collection)
+			}
+
+			lastTableName = out.LastEvaluatedTableName
+			if len(out.TableNames) < int(count) {
+				break
+			}
+		}*/
+		out, err := sess.ListTables(&dynamodb.ListTablesInput{})
+		if err != nil {
+			return fmt.Errorf("list table failed: %v", err)
+		}
+		for _, collection := range out.TableNames {
+			collections = append(collections, *collection)
+		}
+
+		collectionsMp := utils.StringListToMap(collections)
+		LOG.Info("target exit db list: %v", collections)
+		for _, table := range tableList {
+			// check exist on the target
+			if _, ok := collectionsMp[table]; ok {
+				// exist
+				LOG.Info("table[%v] exists, try [%v]", table, conf.Options.TargetDBExist)
+				if conf.Options.TargetDBExist == utils.TargetDBExistDrop {
+					if _, err := sess.DeleteTable(&dynamodb.DeleteTableInput{
+						TableName: aws.String(table),
+					}); err != nil {
+						return fmt.Errorf("drop target collection[%v] failed[%v]", table, err)
+					}
+				} else {
+					return fmt.Errorf("collection[%v] exists on the target", table)
+				}
+			}
+		}
 	}
+
+	LOG.Info("finish handling table exists")
 
 	return nil
 }

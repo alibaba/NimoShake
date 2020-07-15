@@ -14,25 +14,20 @@ import (
 )
 
 // check whether need full sync
-func CheckCkpt(address, db string, dynamoStreams *dynamodbstreams.DynamoDBStreams) (bool, map[string]*dynamodbstreams.Stream, error) {
-	targetClient, err := utils.NewMongoConn(address, utils.ConnectModePrimary, true)
-	if err != nil {
-		return false, nil, fmt.Errorf("connect checkpoint database[%v] failed[%v]", address, err)
-	}
-
+func CheckCkpt(ckptWriter Writer, dynamoStreams *dynamodbstreams.DynamoDBStreams) (bool, map[string]*dynamodbstreams.Stream, error) {
 	// fetch target checkpoint status table
-	status, err := FindStatus(targetClient, db, CheckpointStatusTable)
+	status, err := ckptWriter.FindStatus()
 	if err != nil {
 		return false, nil, fmt.Errorf("find checkpoint status failed[%v]", err)
 	}
 	// need full sync if status != CheckpointStatusValueIncrSync which means last time sync isn't incr sync
 	if status != CheckpointStatusValueIncrSync {
-		LOG.Info("checkpoint status != %v, need full sync", CheckpointStatusValueIncrSync)
+		LOG.Info("checkpoint status[%v] != %v, need full sync", status, CheckpointStatusValueIncrSync)
 		return false, nil, nil
 	}
 
 	// extract checkpoint from mongodb
-	ckptMap, err := ExtractCheckpoint(targetClient, db)
+	ckptMap, err := ckptWriter.ExtractCheckpoint()
 	if err != nil {
 		LOG.Error("extract checkpoint failed[%v]", err)
 		return false, nil, err
@@ -138,7 +133,7 @@ func CheckSingleStream(stream *dynamodbstreams.Stream, dynamoStreams *dynamodbst
 }
 
 // write new checkpoint before full sync
-func PrepareFullSyncCkpt(address, db string, dynamoSession *dynamodb.DynamoDB,
+func PrepareFullSyncCkpt(ckptManager Writer, dynamoSession *dynamodb.DynamoDB,
 	dynamoStreams *dynamodbstreams.DynamoDBStreams) (map[string]*dynamodbstreams.Stream, error) {
 	// fetch source tables
 	sourceTableList, err := utils.FetchTableList(dynamoSession)
@@ -149,11 +144,6 @@ func PrepareFullSyncCkpt(address, db string, dynamoSession *dynamodb.DynamoDB,
 	// filter
 	sourceTableList = filter.FilterList(sourceTableList)
 	sourceTableMap := utils.StringListToMap(sourceTableList)
-
-	targetClient, err := utils.NewMongoConn(address, utils.ConnectModePrimary, true)
-	if err != nil {
-		return nil, fmt.Errorf("connect checkpoint database[%v] failed[%v]", address, err)
-	}
 
 	LOG.Info("traverse current streams")
 	// traverse streams to check whether all streams enabled
@@ -209,7 +199,7 @@ func PrepareFullSyncCkpt(address, db string, dynamoSession *dynamodb.DynamoDB,
 			}
 		}
 
-		LOG.Info("wait new streams created...", sourceTableMap)
+		LOG.Info("wait new streams created[%v]...", sourceTableMap)
 		time.Sleep(30 * time.Second) // wait new stream created
 	}
 
@@ -256,7 +246,7 @@ func PrepareFullSyncCkpt(address, db string, dynamoSession *dynamodb.DynamoDB,
 			streamMap[*stream.TableName] = stream
 
 			// traverse shard
-			LOG.Info("table[%v] not is checkpoint, try to insert", *stream.TableName)
+			LOG.Info("table[%v] isn't has checkpoint, try to insert", *stream.TableName)
 			rootNode := utils.BuildShardTree(describeStreamResult.StreamDescription.Shards, *stream.TableName,
 				*stream.StreamArn)
 
@@ -283,7 +273,8 @@ func PrepareFullSyncCkpt(address, db string, dynamoSession *dynamodb.DynamoDB,
 				if node.Shard.SequenceNumberRange.EndingSequenceNumber != nil {
 					// shard already closed
 					ckpt.Status = StatusNoNeedProcess
-					return InsertCkpt(ckpt, targetClient, db, *stream.TableName)
+					LOG.Info("insert table[%v] checkpoint[%v]: %v", *stream.TableName, *ckpt, ckpt.Status)
+					return ckptManager.Insert(ckpt, *stream.TableName)
 				} else {
 					ckpt.Status = StatusPrepareProcess
 					ckpt.IteratorType = IteratorTypeLatest
@@ -300,7 +291,8 @@ func PrepareFullSyncCkpt(address, db string, dynamoSession *dynamodb.DynamoDB,
 					// set shard iterator map which will be used in incr-sync
 					GlobalShardIteratorMap.Set(*node.Shard.ShardId, *outShardIt.ShardIterator)
 
-					if err = InsertCkpt(ckpt, targetClient, db, *stream.TableName); err != nil {
+					LOG.Info("insert table[%v] checkpoint[%v]", *stream.TableName, *ckpt)
+					if err = ckptManager.Insert(ckpt, *stream.TableName); err != nil {
 						return fmt.Errorf("shard[%v] insert checkpoint failed[%v]", *node.Shard.ShardId, err)
 					}
 

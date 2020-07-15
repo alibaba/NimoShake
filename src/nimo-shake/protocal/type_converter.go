@@ -14,14 +14,14 @@ type TypeConverter struct {
 }
 
 // use dfs to convert to bson.M
-func (tc *TypeConverter) Run(input map[string]*dynamodb.AttributeValue) (MongoData, error) {
+func (tc *TypeConverter) Run(input map[string]*dynamodb.AttributeValue) (interface{}, error) {
 	v := reflect.ValueOf(input)
 	if output := tc.dfs(v); output == nil {
-		return MongoData{}, fmt.Errorf("parse failed, return nil")
-	} else if out, ok := output.(MongoData); !ok {
-		return MongoData{}, fmt.Errorf("parse failed, return type isn't MongoData")
+		return RawData{}, fmt.Errorf("parse failed, return nil")
+	} else if out, ok := output.(RawData); !ok {
+		return RawData{}, fmt.Errorf("parse failed, return type isn't RawData")
 	} else if _, ok := out.Data.(bson.M); !ok {
-		return MongoData{}, fmt.Errorf("parse failed, return data isn't bson.M")
+		return RawData{}, fmt.Errorf("parse failed, return data isn't bson.M")
 	} else {
 		return out, nil
 	}
@@ -40,11 +40,11 @@ func (tc *TypeConverter) dfs(v reflect.Value) interface{} {
 		ret := make([]interface{}, 0, v.Len())
 		for i := 0; i < v.Len(); i++ {
 			out := tc.dfs(v.Index(i))
-			md := out.(MongoData)
+			md := out.(RawData)
 			size += md.Size
 			ret = append(ret, md.Data)
 		}
-		return MongoData{size, ret}
+		return RawData{size, ret}
 	case reflect.Struct:
 		if v.NumField() == 0 {
 			return nil
@@ -62,13 +62,13 @@ func (tc *TypeConverter) dfs(v reflect.Value) interface{} {
 					LOG.Crashf("illegal struct field number")
 				}
 
-				md := out.(MongoData)
+				md := out.(RawData)
 				size += md.Size
 				md.Data = tc.convertToDetail(name, md.Data)
 				ret = md.Data
 			}
 		}
-		return MongoData{size, ret}
+		return RawData{size, ret}
 	case reflect.Map:
 		if len(v.MapKeys()) == 0 {
 			return nil
@@ -79,14 +79,14 @@ func (tc *TypeConverter) dfs(v reflect.Value) interface{} {
 		for _, key := range v.MapKeys() {
 			name := key.String()
 			if out := tc.dfs(v.MapIndex(key)); out != nil {
-				md := out.(MongoData)
+				md := out.(RawData)
 				size += md.Size
 				size += len(name)
 				// out = tc.convertToDetail(name, md.Data, false)
 				ret[name] = md.Data
 			}
 		}
-		return MongoData{size, ret}
+		return RawData{size, ret}
 	case reflect.Ptr:
 		if v.IsNil() {
 			return nil
@@ -101,30 +101,30 @@ func (tc *TypeConverter) dfs(v reflect.Value) interface{} {
 		}
 	case reflect.String:
 		out := v.String()
-		return MongoData{len(out), out}
+		return RawData{len(out), out}
 	case reflect.Int:
 		fallthrough
 	case reflect.Int64:
-		return MongoData{8, v.Int()}
+		return RawData{8, v.Int()}
 	case reflect.Int8:
-		return MongoData{1, int8(v.Int())}
+		return RawData{1, int8(v.Int())}
 	case reflect.Int16:
-		return MongoData{2, int16(v.Int())}
+		return RawData{2, int16(v.Int())}
 	case reflect.Int32:
-		return MongoData{4, int32(v.Int())}
+		return RawData{4, int32(v.Int())}
 	case reflect.Uint:
 		fallthrough
 	case reflect.Uint64:
-		return MongoData{8, v.Uint()}
+		return RawData{8, v.Uint()}
 	case reflect.Uint8:
-		return MongoData{1, uint8(v.Uint())}
+		return RawData{1, uint8(v.Uint())}
 	case reflect.Uint16:
-		return MongoData{2, uint16(v.Uint())}
+		return RawData{2, uint16(v.Uint())}
 	case reflect.Uint32:
-		return MongoData{4, uint32(v.Uint())}
+		return RawData{4, uint32(v.Uint())}
 	case reflect.Bool:
 		// fake size
-		return MongoData{1, v.Bool()}
+		return RawData{1, v.Bool()}
 	default:
 		// not support
 		LOG.Error("unknown type[%v]", v.Kind())

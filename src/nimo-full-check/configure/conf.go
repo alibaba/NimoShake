@@ -17,6 +17,6 @@ var Opts struct {
 	//IndexUser             bool   `long:"indexUser" description:"enable compare user index"`
 	FilterCollectionWhite string `long:"filterCollectionWhite" default:"" description:"only compare the given tables, split by ';'"`
 	FilterCollectionBlack string `long:"filterCollectionBlack" default:"" description:"do not compare the given tables, split by ';'"`
-	ConvertType           string `short:"c" long:"convertType" default:"raw" description:"convert type"`
+	ConvertType           string `short:"c" long:"convertType" default:"change" description:"convert type"`
 	Version               bool   `short:"v" long:"version" description:"print version"`
 }

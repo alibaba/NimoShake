@@ -51,10 +51,10 @@ func Welcome() {
 		`______________________________
 \                             \           _         ______ |
  \                             \        /   \___-=O'/|O'/__|
-  \  DynamoShake, here we go !! \_______\          / | /    )
+  \  NimoShake, here we go !! \_______\          / | /    )
   /                             /        '/-==__ _/__|/__=-|  -GM
- /           Aliyun            /         *             \ | |
-/                             /                        (o)
+ /        Alibaba Cloud        /         *             \ | |
+/            zhuzhao          /                        (o)
 ------------------------------
 `
 	startMsg := "if you have any problem, call aliyun"
