@@ -149,13 +149,13 @@ func sanitizeOptions() error {
 		return fmt.Errorf("illegal target.mongodb.type[%v]", conf.Options.TargetMongoDBType)
 	}
 
-	if conf.Options.TargetType == utils.TargetTypeMongo && conf.Options.TargetMongoDBExist != "" &&
-		conf.Options.TargetMongoDBExist != utils.TargetMongoDBExistRename &&
-		conf.Options.TargetMongoDBExist != utils.TargetMongoDBExistDrop ||
-		conf.Options.TargetType == utils.TargetTypeAliyunDynamoProxy && conf.Options.TargetMongoDBExist != "" &&
-		conf.Options.TargetMongoDBExist != utils.TargetMongoDBExistDrop {
+	if conf.Options.TargetType == utils.TargetTypeMongo && conf.Options.TargetDBExist != "" &&
+		conf.Options.TargetDBExist != utils.TargetDBExistRename &&
+		conf.Options.TargetDBExist != utils.TargetDBExistDrop ||
+		conf.Options.TargetType == utils.TargetTypeAliyunDynamoProxy && conf.Options.TargetDBExist != "" &&
+		conf.Options.TargetDBExist != utils.TargetDBExistDrop {
 		return fmt.Errorf("illegal target.mongodb.exist[%v] when target.type=%v",
-			conf.Options.TargetMongoDBExist, conf.Options.TargetType)
+			conf.Options.TargetDBExist, conf.Options.TargetType)
 	}
 	// set ConvertType
 	if conf.Options.TargetType == utils.TargetTypeAliyunDynamoProxy {

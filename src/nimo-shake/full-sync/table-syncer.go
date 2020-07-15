@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"nimo-shake/qps"
 	"nimo-shake/writer"
+	"time"
 )
 
 const (
@@ -25,7 +26,6 @@ type tableSyncer struct {
 	ns                  utils.NS
 	sourceConn          *dynamodb.DynamoDB
 	sourceTableDescribe *dynamodb.TableDescription
-	targetConn          *utils.MongoConn
 	fetcherChan         chan *dynamodb.ScanOutput // chan between fetcher and parser
 	parserChan          chan interface{}          // chan between parser and writer
 	converter           protocal.Converter        // converter
@@ -47,12 +47,6 @@ func NewTableSyncer(id int, table string) *tableSyncer {
 		return nil
 	}
 
-	targetConn, err := utils.NewMongoConn(conf.Options.TargetAddress, utils.ConnectModePrimary, true)
-	if err != nil {
-		LOG.Error("tableSyncer[%v] create mongodb session error[%v]", id, err)
-		return nil
-	}
-
 	converter := protocal.NewConverter(conf.Options.ConvertType)
 	if converter == nil {
 		LOG.Error("tableSyncer[%v] with table[%v] create converter failed", id, table)
@@ -63,7 +57,6 @@ func NewTableSyncer(id int, table string) *tableSyncer {
 		id:                  id,
 		sourceConn:          sourceConn,
 		sourceTableDescribe: tableDescription.Table,
-		targetConn:          targetConn,
 		converter:           converter,
 		ns: utils.NS{
 			Database:   conf.Options.Id,
@@ -91,6 +84,9 @@ func (ts *tableSyncer) Sync() {
 		return
 	}
 
+	// wait dynamo proxy to sync cache
+	time.Sleep(10 * time.Second)
+
 	// start fetcher to fetch all data from DynamoDB
 	go ts.fetcher()
 
@@ -110,8 +106,10 @@ func (ts *tableSyncer) Sync() {
 	wgWriter.Add(int(conf.Options.FullDocumentConcurrency))
 	for i := 0; i < int(conf.Options.FullDocumentConcurrency); i++ {
 		go func(id int) {
+			LOG.Info("%s create document syncer with id[%v]", ts, id)
 			ds := NewDocumentSyncer(ts.id, ts.ns.Collection, id, ts.parserChan)
 			ds.Run()
+			LOG.Info("%s document syncer with id[%v] exit", ts, id)
 			wgWriter.Done()
 		}(i)
 	}
@@ -128,7 +126,6 @@ func (ts *tableSyncer) Sync() {
 
 func (ts *tableSyncer) Close() {
 	// TODO, dynamo-session doesn't have close function?
-	ts.targetConn.Close()
 }
 
 func (ts *tableSyncer) fetcher() {

@@ -22,6 +22,8 @@ type Writer interface{
 	Update(input []interface{}, index []interface{}) error
 	// close
 	Close()
+	// get session
+	GetSession() interface{}
 }
 
 func NewWriter(name, address string, ns utils.NS, logLevel string) Writer {

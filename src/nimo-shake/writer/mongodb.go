@@ -41,6 +41,10 @@ func (mw *MongoWriter) String() string {
 	return mw.Name
 }
 
+func (mw *MongoWriter) GetSession() interface{} {
+	return mw.conn.Session
+}
+
 func (mw *MongoWriter) CreateTable(tableDescribe *dynamodb.TableDescription) error {
 	// parse primary key with sort key
 	allIndexes := tableDescribe.AttributeDefinitions

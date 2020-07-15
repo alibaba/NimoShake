@@ -24,6 +24,7 @@ func NewDynamoProxyWriter(name, address string, ns utils.NS, logLevel string) *D
 		Region:     aws.String("us-east-2"), // meaningless
 		Endpoint:   aws.String(address),
 		MaxRetries: aws.Int(3),
+		DisableSSL: aws.Bool(true),
 		HTTPClient: &http.Client{
 			Timeout: time.Duration(5000) * time.Millisecond,
 		},
@@ -52,6 +53,10 @@ func NewDynamoProxyWriter(name, address string, ns utils.NS, logLevel string) *D
 
 func (dpw *DynamoProxyWriter) String() string {
 	return dpw.Name
+}
+
+func (dpw *DynamoProxyWriter) GetSession() interface{} {
+	return dpw.svc
 }
 
 func (dpw *DynamoProxyWriter) CreateTable(tableDescribe *dynamodb.TableDescription) error {

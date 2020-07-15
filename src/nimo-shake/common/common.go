@@ -31,8 +31,8 @@ const (
 	TargetMongoDBTypeReplica  = "replica"
 	TargetMongoDBTypeSharding = "sharding"
 
-	TargetMongoDBExistRename = "rename"
-	TargetMongoDBExistDrop   = "drop"
+	TargetDBExistRename = "rename"
+	TargetDBExistDrop   = "drop"
 )
 
 var (

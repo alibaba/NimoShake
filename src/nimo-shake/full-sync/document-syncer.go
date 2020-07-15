@@ -10,10 +10,11 @@ import (
 	"nimo-shake/writer"
 
 	LOG "github.com/vinllen/log4go"
+	"github.com/aws/aws-sdk-go/service/dynamodb"
 )
 
 const (
-	batchNumber  = 512
+	batchNumber  = 25           // dynamo-proxy limit
 	batchSize    = 2 * utils.MB // mongodb limit: 16MB
 	batchTimeout = 1            // seconds
 )
@@ -34,8 +35,8 @@ func NewDocumentSyncer(tableSyncerId int, table string, id int, inputChan chan i
 		Collection: table,
 	}
 
-	writer := writer.NewWriter(conf.Options.TargetType, conf.Options.TargetAddress, ns, conf.Options.LogLevel)
-	if writer == nil {
+	w := writer.NewWriter(conf.Options.TargetType, conf.Options.TargetAddress, ns, conf.Options.LogLevel)
+	if w == nil {
 		LOG.Crashf("tableSyncer[%v] documentSyncer[%v] create writer failed", tableSyncerId, table)
 	}
 
@@ -43,7 +44,7 @@ func NewDocumentSyncer(tableSyncerId int, table string, id int, inputChan chan i
 		tableSyncerId: tableSyncerId,
 		id:            id,
 		inputChan:     inputChan,
-		writer:        writer,
+		writer:        w,
 		ns:            ns,
 	}
 }
@@ -84,6 +85,9 @@ func (ds *documentSyncer) Run() {
 				batchGroup = append(batchGroup, v.Data)
 				batchGroupSize += v.Size
 			}
+		case map[string]*dynamodb.AttributeValue:
+			batchGroup = append(batchGroup, v)
+			// meaningless batchGroupSize
 		}
 
 		if exit || timeout || len(batchGroup) >= batchNumber || batchGroupSize >= batchSize {

@@ -10,6 +10,7 @@ import (
 	LOG "github.com/vinllen/log4go"
 	"github.com/aws/aws-sdk-go/service/dynamodbstreams"
 	"nimo-shake/filter"
+	"nimo-shake/writer"
 )
 
 func Start() {
@@ -24,10 +25,10 @@ func Start() {
 		LOG.Crashf("init global session failed[%v]", err)
 	}
 
-	// check mongodb connection
-	_, err := utils.NewMongoConn(conf.Options.TargetAddress, utils.ConnectModePrimary, true)
-	if err != nil {
-		LOG.Crashf("connect mongodb[%v] failed[%v]", conf.Options.TargetAddress, err)
+	// check writer connection
+	w := writer.NewWriter(conf.Options.TargetType, conf.Options.TargetAddress, utils.NS{"dynamo", "test"}, conf.Options.LogLevel)
+	if w == nil {
+		LOG.Crashf("connect type[%v] address[%v] failed[%v]", conf.Options.TargetType, conf.Options.TargetAddress)
 	}
 
 	// create dynamo session
@@ -76,7 +77,7 @@ func Start() {
 		}
 
 		LOG.Info("start full sync")
-		full_sync.Start(dynamoSession)
+		full_sync.Start(dynamoSession, w)
 		LOG.Info("------------------------full sync done!------------------------")
 	}
 
