@@ -25,6 +25,7 @@ type Configuration struct {
 	TargetAddress                     string `config:"target.address"`
 	TargetMongoDBType                 string `config:"target.mongodb.type"`
 	TargetDBExist                     string `config:"target.db.exist"`
+	SyncSchemaOnly                    bool   `config:"sync_schema_only"`
 	FullConcurrency                   uint   `config:"full.concurrency"`
 	FullDocumentConcurrency           uint   `config:"full.document.concurrency"`
 	FullDocumentParser                uint   `config:"full.document.parser"`
