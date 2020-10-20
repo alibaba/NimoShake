@@ -8,9 +8,9 @@ These two tools are developed and maintained by NoSQL Team in Alibaba-Cloud Data
 #Usage
 ---
 NimoShake:
-`./nimo-shake -conf=nimo-shake.conf`
+`./nimo-shake -conf=nimo-shake.conf`<br>
 NimoFullCheck:
-./nimo-full-check --sourceAccessKeyID="xxx" --sourceSecretAccessKey="xxx" --sourceRegion="us-east-2" --filterTablesWhiteList="table list" -t="target mongodb address"`
+`./nimo-full-check --sourceAccessKeyID="xxx" --sourceSecretAccessKey="xxx" --sourceRegion="us-east-2" --filterTablesWhiteList="table list" -t="target mongodb address"`
 
 # Shake series tool
 ---
