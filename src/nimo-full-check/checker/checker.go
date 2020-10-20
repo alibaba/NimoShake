@@ -83,6 +83,8 @@ func (c *Checker) checkTableExist(tableList []string) error {
 		return fmt.Errorf("get target collection names error[%v]", err)
 	}
 
+	LOG.Info("all table: %v", collections)
+
 	collectionsMp := shakeUtils.StringListToMap(collections)
 	notExist := make([]string, 0)
 	for _, table := range tableList {

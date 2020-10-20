@@ -3,15 +3,17 @@ package full_sync
 import (
 	"sync"
 	"fmt"
+	"time"
 
 	"nimo-shake/common"
 	"nimo-shake/configure"
 	"nimo-shake/protocal"
+	"nimo-shake/qps"
+	"nimo-shake/writer"
 
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	LOG "github.com/vinllen/log4go"
 	"github.com/aws/aws-sdk-go/aws"
-	"nimo-shake/qps"
 )
 
 const (
@@ -20,13 +22,13 @@ const (
 )
 
 type tableSyncer struct {
-	id          int
-	ns          utils.NS
-	sourceConn  *dynamodb.DynamoDB
-	targetConn  *utils.MongoConn
-	fetcherChan chan *dynamodb.ScanOutput // chan between fetcher and parser
-	parserChan  chan protocal.MongoData   // chan between parser and writer
-	converter   protocal.Converter        // converter
+	id                  int
+	ns                  utils.NS
+	sourceConn          *dynamodb.DynamoDB
+	sourceTableDescribe *dynamodb.TableDescription
+	fetcherChan         chan *dynamodb.ScanOutput // chan between fetcher and parser
+	parserChan          chan interface{}          // chan between parser and writer
+	converter           protocal.Converter        // converter
 }
 
 func NewTableSyncer(id int, table string) *tableSyncer {
@@ -36,9 +38,12 @@ func NewTableSyncer(id int, table string) *tableSyncer {
 		return nil
 	}
 
-	targetConn, err := utils.NewMongoConn(conf.Options.TargetAddress, utils.ConnectModePrimary, true)
+	// describe source table
+	tableDescription, err := sourceConn.DescribeTable(&dynamodb.DescribeTableInput{
+		TableName: aws.String(table),
+	})
 	if err != nil {
-		LOG.Error("tableSyncer[%v] create mongodb session error[%v]", id, err)
+		LOG.Error("tableSyncer[%v] with table[%v] describe failed[%v]", id, table, err)
 		return nil
 	}
 
@@ -49,10 +54,10 @@ func NewTableSyncer(id int, table string) *tableSyncer {
 	}
 
 	return &tableSyncer{
-		id:         id,
-		sourceConn: sourceConn,
-		targetConn: targetConn,
-		converter:  converter,
+		id:                  id,
+		sourceConn:          sourceConn,
+		sourceTableDescribe: tableDescription.Table,
+		converter:           converter,
 		ns: utils.NS{
 			Database:   conf.Options.Id,
 			Collection: table,
@@ -66,7 +71,26 @@ func (ts *tableSyncer) String() string {
 
 func (ts *tableSyncer) Sync() {
 	ts.fetcherChan = make(chan *dynamodb.ScanOutput, fetcherChanSize)
-	ts.parserChan = make(chan protocal.MongoData, parserChanSize)
+	ts.parserChan = make(chan interface{}, parserChanSize)
+
+	targetWriter := writer.NewWriter(conf.Options.TargetType, conf.Options.TargetAddress, ts.ns, conf.Options.LogLevel)
+	if targetWriter == nil {
+		LOG.Crashf("%s create writer failed", ts)
+		return
+	}
+	// create table and index with description
+	if err := targetWriter.CreateTable(ts.sourceTableDescribe); err != nil {
+		LOG.Crashf("%s create table failed: %v", ts, err)
+		return
+	}
+
+	// wait dynamo proxy to sync cache
+	time.Sleep(10 * time.Second)
+
+	if conf.Options.SyncSchemaOnly {
+		LOG.Info("sync_schema_only enabled, %s exits", ts)
+		return
+	}
 
 	// start fetcher to fetch all data from DynamoDB
 	go ts.fetcher()
@@ -87,8 +111,10 @@ func (ts *tableSyncer) Sync() {
 	wgWriter.Add(int(conf.Options.FullDocumentConcurrency))
 	for i := 0; i < int(conf.Options.FullDocumentConcurrency); i++ {
 		go func(id int) {
+			LOG.Info("%s create document syncer with id[%v]", ts, id)
 			ds := NewDocumentSyncer(ts.id, ts.ns.Collection, id, ts.parserChan)
 			ds.Run()
+			LOG.Info("%s document syncer with id[%v] exit", ts, id)
 			wgWriter.Done()
 		}(i)
 	}
@@ -101,22 +127,10 @@ func (ts *tableSyncer) Sync() {
 	wgWriter.Wait() // wait all writer exit
 
 	LOG.Info("%s finish syncing table", ts.String())
-
-	// start write index
-	if conf.Options.FullEnableIndexPrimary || conf.Options.FullEnableIndexUser {
-		// enable index
-		LOG.Info("%s try to write index", ts.String())
-		ix := NewIndex(ts.sourceConn, ts.targetConn, ts.ns)
-		if err := ix.CreateIndex(); err != nil {
-			LOG.Error("%s create index failed[%v]", ts.String(), err)
-		}
-		LOG.Info("%s finish syncing index", ts.String())
-	}
 }
 
 func (ts *tableSyncer) Close() {
 	// TODO, dynamo-session doesn't have close function?
-	ts.targetConn.Close()
 }
 
 func (ts *tableSyncer) fetcher() {

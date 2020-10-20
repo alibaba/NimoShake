@@ -20,12 +20,11 @@ type Fetcher struct {
 	dynamoClient *dynamodbstreams.DynamoDBStreams
 	table        string
 	stream       *dynamodbstreams.Stream
-	ckptClient   *utils.MongoConn
-	ckptDb       string
 	shardChan    chan *utils.ShardNode
+	ckptWriter   checkpoint.Writer
 }
 
-func NewFetcher(table string, stream *dynamodbstreams.Stream, shardChan chan *utils.ShardNode) *Fetcher {
+func NewFetcher(table string, stream *dynamodbstreams.Stream, shardChan chan *utils.ShardNode, ckptWriter checkpoint.Writer) *Fetcher {
 	// create dynamo stream client
 	dynamoStreamSession, err := utils.CreateDynamoStreamSession(conf.Options.LogLevel)
 	if err != nil {
@@ -33,19 +32,12 @@ func NewFetcher(table string, stream *dynamodbstreams.Stream, shardChan chan *ut
 		return nil
 	}
 
-	ckptConn, err := utils.NewMongoConn(conf.Options.CheckpointAddress, utils.ConnectModePrimary, true)
-	if err != nil {
-		LOG.Error("connect checkpoint mongodb[%v] failed[%v]", conf.Options.CheckpointAddress, err)
-		return nil
-	}
-
 	return &Fetcher{
 		dynamoClient: dynamoStreamSession,
 		table:        table,
 		stream:       stream,
-		ckptClient:   ckptConn,
-		ckptDb:       conf.Options.CheckpointDb,
 		shardChan:    shardChan,
+		ckptWriter:   ckptWriter,
 	}
 }
 
@@ -91,7 +83,7 @@ func (f *Fetcher) Run() {
 		}
 
 		// extract checkpoint from mongodb
-		ckptSingleMap, err := checkpoint.ExtractSingleCheckpoint(f.ckptClient, f.ckptDb, f.table)
+		ckptSingleMap, err := f.ckptWriter.ExtractSingleCheckpoint(f.table)
 		if err != nil {
 			LOG.Crashf("extract checkpoint failed[%v]", err)
 		}
@@ -115,15 +107,15 @@ func (f *Fetcher) Run() {
 			if !ok {
 				// insert checkpoint
 				newCkpt := &checkpoint.Checkpoint{
-					ShardId:         id,
-					SequenceNumber:  *node.Shard.SequenceNumberRange.StartingSequenceNumber,
-					Status:          checkpoint.StatusPrepareProcess,
-					WorkerId:        "unknown",
-					FatherId:        father,
-					IteratorType:    checkpoint.IteratorTypeSequence,
-					UpdateTimestamp: "", // empty at first
+					ShardId:        id,
+					SequenceNumber: *node.Shard.SequenceNumberRange.StartingSequenceNumber,
+					Status:         checkpoint.StatusPrepareProcess,
+					WorkerId:       "unknown",
+					FatherId:       father,
+					IteratorType:   checkpoint.IteratorTypeSequence,
+					UpdateDate:     "", // empty at first
 				}
-				checkpoint.InsertCkpt(newCkpt, f.ckptClient, f.ckptDb, f.table)
+				f.ckptWriter.Insert(newCkpt, f.table)
 				shardList = append(shardList, node)
 				LOG.Info("insert new checkpoint: %v", *newCkpt)
 				return utils.StopTraverseSonErr
@@ -147,7 +139,7 @@ func (f *Fetcher) Run() {
 				ckpt.SequenceNumber = *node.Shard.SequenceNumberRange.StartingSequenceNumber
 				ckpt.Status = checkpoint.StatusPrepareProcess
 				ckpt.IteratorType = checkpoint.IteratorTypeSequence
-				checkpoint.UpdateCkpt(ckpt.ShardId, ckpt, f.ckptClient, f.ckptDb, f.table)
+				f.ckptWriter.Update(ckpt.ShardId, ckpt, f.table)
 				shardList = append(shardList, node)
 				return utils.StopTraverseSonErr
 			case checkpoint.StatusDone:

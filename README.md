@@ -5,7 +5,13 @@ These two tools are developed and maintained by NoSQL Team in Alibaba-Cloud Data
 * [中文文档介绍](https://yq.aliyun.com/articles/717439)
 * [binary download](https://github.com/alibaba/NimoShake/releases)
 
+#Usage
 ---
+NimoShake:
+`./nimo-shake -conf=nimo-shake.conf`<br>
+NimoFullCheck:
+`./nimo-full-check --sourceAccessKeyID="xxx" --sourceSecretAccessKey="xxx" --sourceRegion="us-east-2" --filterTablesWhiteList="table list" -t="target mongodb address"`
+
 # Shake series tool
 ---
 We also provide some tools for synchronization in Shake series.<br>

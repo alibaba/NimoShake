@@ -13,6 +13,7 @@ import (
 
 	LOG "github.com/vinllen/log4go"
 	"github.com/gugemichael/nimo4go"
+	"nimo-shake/checkpoint"
 )
 
 type Exit struct{ Code int }
@@ -109,8 +110,8 @@ func sanitizeOptions() error {
 		conf.Options.QpsIncrBatchNum = 128
 	}
 
-	if conf.Options.TargetType != utils.TargetTypeMongo {
-		return fmt.Errorf("conf.Options.TargetType[%v] only supports mongo currently", conf.Options.TargetType)
+	if conf.Options.TargetType != utils.TargetTypeMongo && conf.Options.TargetType != utils.TargetTypeAliyunDynamoProxy {
+		return fmt.Errorf("conf.Options.TargetType[%v] supports {mongodb, aliyun_dynamo_proxy} currently", conf.Options.TargetType)
 	}
 
 	if len(conf.Options.TargetAddress) == 0 {
@@ -129,6 +130,12 @@ func sanitizeOptions() error {
 		return fmt.Errorf("full.document.parser[%v] should in (0, 4096]", conf.Options.FullDocumentParser)
 	}
 
+	// always enable
+	conf.Options.FullEnableIndexPrimary = true
+
+	if conf.Options.ConvertType == "" {
+		conf.Options.ConvertType = utils.ConvertTypeChange
+	}
 	if conf.Options.ConvertType != utils.ConvertTypeRaw && conf.Options.ConvertType != utils.ConvertTypeChange {
 		return fmt.Errorf("convert.type[%v] illegal", conf.Options.ConvertType)
 	}
@@ -142,16 +149,38 @@ func sanitizeOptions() error {
 		return fmt.Errorf("illegal target.mongodb.type[%v]", conf.Options.TargetMongoDBType)
 	}
 
-	if conf.Options.TargetMongoDBExist != "" && conf.Options.TargetMongoDBExist != utils.TargetMongoDBExistRename &&
-		conf.Options.TargetMongoDBExist != utils.TargetMongoDBExistDrop {
-		return fmt.Errorf("illegal target.mongodb.exist[%v]", conf.Options.TargetMongoDBExist)
+	if conf.Options.TargetType == utils.TargetTypeMongo && conf.Options.TargetDBExist != "" &&
+		conf.Options.TargetDBExist != utils.TargetDBExistRename &&
+		conf.Options.TargetDBExist != utils.TargetDBExistDrop ||
+		conf.Options.TargetType == utils.TargetTypeAliyunDynamoProxy && conf.Options.TargetDBExist != "" &&
+		conf.Options.TargetDBExist != utils.TargetDBExistDrop {
+		return fmt.Errorf("illegal target.mongodb.exist[%v] when target.type=%v",
+			conf.Options.TargetDBExist, conf.Options.TargetType)
+	}
+	// set ConvertType
+	if conf.Options.TargetType == utils.TargetTypeAliyunDynamoProxy {
+		conf.Options.ConvertType = utils.ConvertTypeSame
 	}
 
+	// checkpoint
+	if conf.Options.CheckpointType == "" {
+		conf.Options.CheckpointType = checkpoint.CheckpointWriterTypeFile
+	}
 	if conf.Options.CheckpointAddress == "" {
-		conf.Options.CheckpointAddress = conf.Options.TargetAddress
+		if conf.Options.TargetType == utils.TargetTypeMongo {
+			conf.Options.CheckpointAddress = conf.Options.TargetAddress
+		} else {
+			conf.Options.CheckpointAddress = "checkpoint"
+		}
 	}
 	if conf.Options.CheckpointDb == "" {
 		conf.Options.CheckpointDb = fmt.Sprintf("%s-%s", conf.Options.Id, "checkpoint")
+	}
+
+	if conf.Options.TargetType == utils.TargetTypeAliyunDynamoProxy &&
+			(!conf.Options.IncreaseExecutorUpsert || !conf.Options.IncreaseExecutorInsertOnDupUpdate) {
+		return fmt.Errorf("increase.executor.upsert and increase.executor.insert_on_dup_update should be " +
+			"enable when target type is %v", utils.TargetTypeAliyunDynamoProxy)
 	}
 
 	return nil

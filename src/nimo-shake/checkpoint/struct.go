@@ -1,12 +1,13 @@
 package checkpoint
 
 import (
-	"nimo-shake/common"
-	"github.com/vinllen/mgo/bson"
 	"nimo-shake/filter"
+	"sync"
 )
 
 const (
+	CheckpointWriterTypeMongo     = "mongodb"
+	CheckpointWriterTypeFile      = "file"
 	CheckpointStatusTable         = "status_table"
 	CheckpointStatusKey           = "status_key"
 	CheckpointStatusValueEmpty    = ""
@@ -26,50 +27,75 @@ const (
 
 	StreamViewType = "NEW_AND_OLD_IMAGES"
 
-	FieldShardId      = "shard_id"
-	FieldShardIt      = "shard_it"
-	FieldStatus       = "status"
-	FieldSeqNum       = "seq_num"
-	FieldIteratorType = "iterator_type"
-	FieldTimestamp    = "update_date"
+	FieldShardId      = "ShardId"
+	FieldShardIt      = "ShardIt"
+	FieldStatus       = "Status"
+	FieldSeqNum       = "SeqNum"
+	FieldIteratorType = "IteratorType"
+	FieldTimestamp    = "UpdateDate"
 )
 
 type Checkpoint struct {
-	ShardId         string `bson:"shard_id"`      // shard id
-	FatherId        string `bson:"father_id"`     // father id
-	SequenceNumber  string `bson:"seq_num"`       // checkpoint
-	Status          string `bson:"status"`        // status
-	WorkerId        string `bson:"worker_id"`     // thread number
-	IteratorType    string `bson:"iterator_type"` // "LATEST" or "AT_SEQUENCE_NUMBER"
-	ShardIt         string `bson:"shard_it"`      // only used when IteratorType == "LATEST"
-	UpdateTimestamp string `bson:"update_date"`
+	ShardId        string `bson:"ShardId" json:"ShardId"`           // shard id
+	FatherId       string `bson:"FatherId" json:"FatherId"`         // father id
+	SequenceNumber string `bson:"SeqNum" json:"SeqNum"`             // checkpoint
+	Status         string `bson:"Status" json:"Status"`             // status
+	WorkerId       string `bson:"WorkerId" json:"WorkerId"`         // thread number
+	IteratorType   string `bson:"IteratorType" json:"IteratorType"` // "LATEST" or "AT_SEQUENCE_NUMBER"
+	ShardIt        string `bson:"ShardIt" json:"ShardIt"`           // only used when IteratorType == "LATEST"
+	UpdateDate     string `bson:"UpdateDate" json:"UpdateDate"`
 }
 
 type Status struct {
-	Key   string `bson:"key"`          // key -> CheckpointStatusKey
-	Value string `bson:"status_value"` // CheckpointStatusValueFullSync or CheckpointStatusValueIncrSync
+	Key   string `bson:"Key" json:"Key"`                 // key -> CheckpointStatusKey
+	Value string `bson:"StatusValue" json:"StatusValue"` // CheckpointStatusValueFullSync or CheckpointStatusValueIncrSync
 }
 
-func FindStatus(targetClient *utils.MongoConn, db, collection string) (string, error) {
-	var query Status
-	if err := targetClient.Session.DB(db).C(collection).Find(bson.M{"key": CheckpointStatusKey}).One(&query); err != nil {
-		if err.Error() == utils.NotFountErr {
-			return CheckpointStatusValueEmpty, nil
-		}
-		return "", err
-	} else {
-		return query.Value, nil
+/*---------------------------------------*/
+
+var (
+	GlobalShardIteratorMap = ShardIteratorMap{
+		mp: make(map[string]string),
 	}
+)
+
+type ShardIteratorMap struct {
+	mp   map[string]string
+	lock sync.Mutex
 }
 
-func UpsertStatus(targetClient *utils.MongoConn, db, collection string, input string) error {
-	update := Status{
-		Key:   CheckpointStatusKey,
-		Value: input,
+func (sim *ShardIteratorMap) Set(key, iterator string) bool {
+	sim.lock.Lock()
+	defer sim.lock.Unlock()
+
+	if _, ok := sim.mp[key]; ok {
+		return false
 	}
-	_, err := targetClient.Session.DB(db).C(collection).Upsert(bson.M{"key": CheckpointStatusKey}, update)
-	return err
+
+	sim.mp[key] = iterator
+	return false
 }
+
+func (sim *ShardIteratorMap) Get(key string) (string, bool) {
+	sim.lock.Lock()
+	defer sim.lock.Unlock()
+
+	it, ok := sim.mp[key]
+	return it, ok
+}
+
+func (sim *ShardIteratorMap) Delete(key string) bool {
+	sim.lock.Lock()
+	defer sim.lock.Unlock()
+
+	if _, ok := sim.mp[key]; ok {
+		delete(sim.mp, key)
+		return true
+	}
+	return false
+}
+
+/*---------------------------------------*/
 
 func FilterCkptCollection(collection string) bool {
 	return collection == CheckpointStatusTable || filter.IsFilter(collection)

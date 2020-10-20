@@ -13,6 +13,7 @@ const (
 
 	ConvertTypeRaw    = "raw"
 	ConvertTypeChange = "change"
+	ConvertTypeSame   = "same" // used in dynamodb -> dynamo-proxy
 
 	KB = 1024
 	MB = 1024 * KB
@@ -24,13 +25,14 @@ const (
 	SyncModeFull = "full"
 	SyncModeIncr = "incr"
 
-	TargetTypeMongo = "mongodb"
+	TargetTypeMongo             = "mongodb"
+	TargetTypeAliyunDynamoProxy = "aliyun_dynamo_proxy"
 
 	TargetMongoDBTypeReplica  = "replica"
 	TargetMongoDBTypeSharding = "sharding"
 
-	TargetMongoDBExistRename = "rename"
-	TargetMongoDBExistDrop   = "drop"
+	TargetDBExistRename = "rename"
+	TargetDBExistDrop   = "drop"
 )
 
 var (
@@ -52,7 +54,8 @@ func InitialLogger(logFile string, level string, logBuffer bool) bool {
 		}
 		fileLogger := LOG.NewFileLogWriter(fmt.Sprintf("logs/%s", logFile), true)
 		fileLogger.SetRotateDaily(true)
-		fileLogger.SetFormat("[%D %T] [%L] [%s] %M")
+		// fileLogger.SetFormat("[%D %T] [%L] [%s] %M")
+		fileLogger.SetFormat("[%D %T] [%L] %M")
 		fileLogger.SetRotateMaxBackup(7)
 		LOG.AddFilter("file", logLevel, fileLogger)
 	} else {
