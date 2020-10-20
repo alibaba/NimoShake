@@ -95,7 +95,7 @@ func (dpw *DynamoProxyWriter) CreateTable(tableDescribe *dynamodb.TableDescripti
 
 	_, err := dpw.svc.CreateTable(createTableInput)
 	if err != nil {
-		LOG.Error("create table[%v] fail: %v", tableDescribe.TableName, err)
+		LOG.Error("create table[%v] fail: %v", *tableDescribe.TableName, err)
 		return err
 	}
 
@@ -105,12 +105,12 @@ func (dpw *DynamoProxyWriter) CreateTable(tableDescribe *dynamodb.TableDescripti
 			TableName: tableDescribe.TableName,
 		})
 		if err != nil {
-			LOG.Warn("create table[%v] ok but describe failed: %v", tableDescribe.TableName, err)
+			LOG.Warn("create table[%v] ok but describe failed: %v", *tableDescribe.TableName, err)
 			return true
 		}
 
 		if *out.Table.TableStatus != "ACTIVE" {
-			LOG.Warn("create table[%v] ok but describe not ready: %v", tableDescribe.TableName, *out.Table.TableStatus)
+			LOG.Warn("create table[%v] ok but describe not ready: %v", *tableDescribe.TableName, *out.Table.TableStatus)
 			return true
 		}
 

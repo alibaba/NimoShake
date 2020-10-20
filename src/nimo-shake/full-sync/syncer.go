@@ -15,6 +15,7 @@ import (
 	"github.com/vinllen/mgo/bson"
 	"github.com/vinllen/mgo"
 	"github.com/aws/aws-sdk-go/aws"
+	"strings"
 )
 
 func Start(dynamoSession *dynamodb.DynamoDB, w writer.Writer) {
@@ -29,8 +30,10 @@ func Start(dynamoSession *dynamodb.DynamoDB, w writer.Writer) {
 	tableList = filter.FilterList(tableList)
 
 	if err := checkTableExists(tableList, w); err != nil {
-		LOG.Crashf("check table exists failed[%v]", err)
-		return
+		if !strings.Contains(err.Error(), "ResourceNotFoundException") {
+			LOG.Crashf("check table exists failed[%v]", err)
+			return
+		}
 	}
 
 	LOG.Info("start syncing: %v", tableList)

@@ -86,6 +86,11 @@ func Start() {
 		return
 	}
 
+	if conf.Options.SyncSchemaOnly {
+		LOG.Info("sync_schema_only enabled, finish")
+		return
+	}
+
 	// update checkpoint
 	if err := ckptWriter.UpdateStatus(checkpoint.CheckpointStatusValueIncrSync); err != nil {
 		LOG.Crashf("set checkpoint to [%v] failed[%v]", checkpoint.CheckpointStatusValueIncrSync, err)
