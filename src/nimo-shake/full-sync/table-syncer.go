@@ -3,17 +3,17 @@ package full_sync
 import (
 	"sync"
 	"fmt"
+	"time"
 
 	"nimo-shake/common"
 	"nimo-shake/configure"
 	"nimo-shake/protocal"
+	"nimo-shake/qps"
+	"nimo-shake/writer"
 
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	LOG "github.com/vinllen/log4go"
 	"github.com/aws/aws-sdk-go/aws"
-	"nimo-shake/qps"
-	"nimo-shake/writer"
-	"time"
 )
 
 const (
@@ -86,6 +86,11 @@ func (ts *tableSyncer) Sync() {
 
 	// wait dynamo proxy to sync cache
 	time.Sleep(10 * time.Second)
+
+	if conf.Options.SyncSchemaOnly {
+		LOG.Info("sync_schema_only enabled, %s exits", ts)
+		return
+	}
 
 	// start fetcher to fetch all data from DynamoDB
 	go ts.fetcher()

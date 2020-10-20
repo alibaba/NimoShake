@@ -1,16 +1,18 @@
 package writer
 
 import (
-	"nimo-shake/common"
-	"github.com/aws/aws-sdk-go/aws"
-	"net/http"
-	"time"
-	"github.com/aws/aws-sdk-go/aws/session"
-
-	LOG "github.com/vinllen/log4go"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"fmt"
 	"bytes"
+	"net/http"
+	"time"
+
+	"nimo-shake/common"
+	"nimo-shake/configure"
+
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
+	LOG "github.com/vinllen/log4go"
+	"github.com/aws/aws-sdk-go/service/dynamodb"
 )
 
 type DynamoProxyWriter struct {
@@ -60,13 +62,40 @@ func (dpw *DynamoProxyWriter) GetSession() interface{} {
 }
 
 func (dpw *DynamoProxyWriter) CreateTable(tableDescribe *dynamodb.TableDescription) error {
-	_, err := dpw.svc.CreateTable(&dynamodb.CreateTableInput{
+	createTableInput := &dynamodb.CreateTableInput{
 		AttributeDefinitions: tableDescribe.AttributeDefinitions,
 		KeySchema:            tableDescribe.KeySchema,
 		TableName:            tableDescribe.TableName,
-	})
+	}
+
+	if conf.Options.FullEnableIndexUser {
+		// convert []*GlobalSecondaryIndexDescription => []*GlobalSecondaryIndex
+		gsiList := make([]*dynamodb.GlobalSecondaryIndex, 0, len(tableDescribe.GlobalSecondaryIndexes))
+		for _, gsiDesc := range tableDescribe.GlobalSecondaryIndexes {
+			gsiList = append(gsiList, &dynamodb.GlobalSecondaryIndex{
+				IndexName: gsiDesc.IndexName,
+				KeySchema: gsiDesc.KeySchema,
+				Projection: gsiDesc.Projection,
+				// ProvisionedThroughput: gsiDesc.ProvisionedThroughput,
+			})
+		}
+		createTableInput.SetGlobalSecondaryIndexes(gsiList)
+
+		// convert []*LocalSecondaryIndexDescription => []*LocalSecondaryIndex
+		lsiList := make([]*dynamodb.LocalSecondaryIndex, 0, len(tableDescribe.LocalSecondaryIndexes))
+		for _, lsiDesc := range tableDescribe.LocalSecondaryIndexes {
+			lsiList = append(lsiList, &dynamodb.LocalSecondaryIndex{
+				IndexName: lsiDesc.IndexName,
+				KeySchema: lsiDesc.KeySchema,
+				Projection: lsiDesc.Projection,
+			})
+		}
+		createTableInput.SetLocalSecondaryIndexes(lsiList)
+	}
+
+	_, err := dpw.svc.CreateTable(createTableInput)
 	if err != nil {
-		LOG.Error("create table[%v] fail: %v", tableDescribe.TableName, err)
+		LOG.Error("create table[%v] fail: %v", *tableDescribe.TableName, err)
 		return err
 	}
 
@@ -76,14 +105,15 @@ func (dpw *DynamoProxyWriter) CreateTable(tableDescribe *dynamodb.TableDescripti
 			TableName: tableDescribe.TableName,
 		})
 		if err != nil {
-			LOG.Warn("create table[%v] ok but describe failed: %v", tableDescribe.TableName, err)
+			LOG.Warn("create table[%v] ok but describe failed: %v", *tableDescribe.TableName, err)
 			return true
 		}
 
 		if *out.Table.TableStatus != "ACTIVE" {
-			LOG.Warn("create table[%v] ok but describe not ready: %v", tableDescribe.TableName, *out.Table.TableStatus)
+			LOG.Warn("create table[%v] ok but describe not ready: %v", *tableDescribe.TableName, *out.Table.TableStatus)
 			return true
 		}
+
 		return false
 	}
 
