@@ -13,7 +13,7 @@ logs
 tags
 bin/*
 conf/*
-!conf/dynamo-shake.conf
+!conf/nimo-shake.conf
 
 runtime.trace
 
