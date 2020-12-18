@@ -10,6 +10,8 @@ import (
 type Writer interface{
 	// create table
 	CreateTable(tableDescribe *dynamodb.TableDescription) error
+	// pass table description
+	PassTableDesc(tableDescribe *dynamodb.TableDescription)
 	// drop table
 	DropTable() error
 	// write bulk data, used in full sync

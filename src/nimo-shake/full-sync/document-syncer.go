@@ -4,19 +4,24 @@ import (
 	"time"
 	"fmt"
 
-	"nimo-shake/protocal"
 	"nimo-shake/common"
 	"nimo-shake/configure"
 	"nimo-shake/writer"
 
 	LOG "github.com/vinllen/log4go"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
+	"nimo-shake/protocal"
 )
 
 const (
 	batchNumber  = 25           // dynamo-proxy limit
 	batchSize    = 2 * utils.MB // mongodb limit: 16MB
 	batchTimeout = 1            // seconds
+)
+
+var (
+	UT_TestDocumentSyncer = false
+	UT_TestDocumentSyncer_Chan chan []interface{}
 )
 
 /*------------------------------------------------------*/
@@ -29,7 +34,7 @@ type documentSyncer struct {
 	writer        writer.Writer
 }
 
-func NewDocumentSyncer(tableSyncerId int, table string, id int, inputChan chan interface{}) *documentSyncer {
+func NewDocumentSyncer(tableSyncerId int, table string, id int, inputChan chan interface{}, tableDescribe *dynamodb.TableDescription) *documentSyncer {
 	ns := utils.NS{
 		Database:   conf.Options.Id,
 		Collection: table,
@@ -39,6 +44,8 @@ func NewDocumentSyncer(tableSyncerId int, table string, id int, inputChan chan i
 	if w == nil {
 		LOG.Crashf("tableSyncer[%v] documentSyncer[%v] create writer failed", tableSyncerId, table)
 	}
+
+	w.PassTableDesc(tableDescribe)
 
 	return &documentSyncer{
 		tableSyncerId: tableSyncerId,
@@ -74,20 +81,27 @@ func (ds *documentSyncer) Run() {
 		case <-time.After(time.Second * batchTimeout):
 			// timeout
 			timeout = true
+			data = nil
 		}
 
 		LOG.Debug("exit[%v], timeout[%v], len(batchGroup)[%v], batchGroupSize[%v], data[%v]", exit, timeout,
 			len(batchGroup), batchGroupSize, data)
 
-		switch v := data.(type) {
-		case protocal.RawData:
-			if v.Size > 0 {
-				batchGroup = append(batchGroup, v.Data)
-				batchGroupSize += v.Size
+		if data != nil {
+			if UT_TestDocumentSyncer {
+				batchGroup = append(batchGroup, data)
+			} else {
+				switch v := data.(type) {
+				case protocal.RawData:
+					if v.Size > 0 {
+						batchGroup = append(batchGroup, v.Data)
+						batchGroupSize += v.Size
+					}
+				case map[string]*dynamodb.AttributeValue:
+					batchGroup = append(batchGroup, v)
+					// meaningless batchGroupSize
+				}
 			}
-		case map[string]*dynamodb.AttributeValue:
-			batchGroup = append(batchGroup, v)
-			// meaningless batchGroupSize
 		}
 
 		if exit || timeout || len(batchGroup) >= batchNumber || batchGroupSize >= batchSize {
@@ -113,6 +127,11 @@ func (ds *documentSyncer) Run() {
 func (ds *documentSyncer) write(input []interface{}) error {
 	LOG.Debug("%s writing data with length[%v]", ds.String(), len(input))
 	if len(input) == 0 {
+		return nil
+	}
+
+	if UT_TestDocumentSyncer {
+		UT_TestDocumentSyncer_Chan <- input
 		return nil
 	}
 
