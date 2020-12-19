@@ -49,6 +49,9 @@ func (tc *TypeConverter) dfs(v reflect.Value) interface{} {
 		if v.NumField() == 0 {
 			return nil
 		}
+		if v.Type().Name() == "bson.Decimal128" {
+			return RawData{16, v}
+		}
 
 		size := 0
 		var ret interface{}
@@ -151,10 +154,10 @@ func (tc *TypeConverter) convertToDetail(name string, input interface{}) interfa
 		return output
 	case "NS":
 		list := input.([]interface{})
-		output := make([]float64, 0, len(list))
+		output := make([]bson.Decimal128, 0, len(list))
 		for _, ele := range list {
 			inner := tc.convertToDetail("N", ele)
-			output = append(output, inner.(float64))
+			output = append(output, inner.(bson.Decimal128))
 		}
 		return output
 	case "SS":
@@ -178,10 +181,16 @@ func (tc *TypeConverter) convertToDetail(name string, input interface{}) interfa
 		return input.(bool)
 	case "N":
 		v := input.(string)
-		val, err := strconv.ParseFloat(v, 64)
+		val, err := bson.ParseDecimal128(v)
 		if err != nil {
-			LOG.Crashf("convert N to float64 failed[%v]", err)
-			return nil
+			LOG.Error("convert N to decimal128 failed[%v]", err)
+			val2, err := strconv.ParseFloat(v, 64)
+			if err != nil {
+				LOG.Crashf("convert N to decimal128 and float64 both failed[%v]", err)
+			}
+
+			val, _ = bson.ParseDecimal128(fmt.Sprintf("%v", val2))
+			return val
 		}
 		return val
 	case "S":
