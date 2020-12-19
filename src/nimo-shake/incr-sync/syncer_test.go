@@ -8,6 +8,8 @@ import (
 	"nimo-shake/common"
 	"nimo-shake/checkpoint"
 	"nimo-shake/protocal"
+	"nimo-shake/configure"
+	"nimo-shake/writer"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/aws/aws-sdk-go/service/dynamodbstreams"
@@ -18,7 +20,7 @@ import (
 )
 
 const (
-	TestMongoAddress = "mongodb://100.81.164.177:30442,100.81.164.177:30441,100.81.164.177:30443"
+	TestMongoAddress = "mongodb://100.81.164.186:31772,100.81.164.186:31771,100.81.164.186:31773"
 )
 
 func TestBatcher(t *testing.T) {
@@ -364,6 +366,10 @@ func TestBatcher_Executor(t *testing.T) {
 	// test batcher and executor
 	var nr int
 
+	conf.Options.TargetType = utils.TargetTypeMongo
+	conf.Options.TargetAddress = TestMongoAddress
+	conf.Options.LogLevel = "info"
+
 	// simple test
 	{
 		fmt.Printf("TestBatcher_Executor case %d.\n", nr)
@@ -371,27 +377,29 @@ func TestBatcher_Executor(t *testing.T) {
 
 		utils.InitialLogger("", "info", true)
 
+		ckpt := checkpoint.NewWriter(checkpoint.CheckpointWriterTypeFile, "test-ckpt", "test-db")
 		// remove test checkpoint table
-		err := checkpoint.DropCheckpoint(TestMongoAddress, "utTestDB")
+		err := ckpt.DropAll()
+		assert.Equal(t, nil, err, "should be equal")
+
+		targetClient, err := utils.NewMongoConn(TestMongoAddress, utils.ConnectModePrimary, true)
 		assert.Equal(t, nil, err, "should be equal")
 
 		converter := protocal.NewConverter("raw")
 		assert.Equal(t, true, converter != nil, "should be equal")
 
-		targetClient, err := utils.NewMongoConn(TestMongoAddress, utils.ConnectModePrimary, true)
-		assert.Equal(t, nil, err, "should be equal")
-
 		d := &Dispatcher{
 			batchChan:    make(chan *dynamodbstreams.Record, 100),
 			executorChan: make(chan *ExecuteNode, 100),
 			converter:    converter,
-			targetClient: targetClient,
 			ns: utils.NS{
 				Database:   "utTestDB",
 				Collection: "utTestCollection",
 			},
 			unitTestStr: "test",
 		}
+		d.targetWriter = writer.NewWriter(conf.Options.TargetType, conf.Options.TargetAddress, d.ns, conf.Options.LogLevel)
+		d.targetWriter.DropTable()
 
 		go d.batcher()
 		go d.executor()
@@ -449,27 +457,29 @@ func TestBatcher_Executor(t *testing.T) {
 
 		utils.InitialLogger("", "info", true)
 
+		ckpt := checkpoint.NewWriter(checkpoint.CheckpointWriterTypeFile, "test-ckpt", "test-db")
 		// remove test checkpoint table
-		err := checkpoint.DropCheckpoint(TestMongoAddress, "utTestDB")
+		err := ckpt.DropAll()
+		assert.Equal(t, nil, err, "should be equal")
+
+		targetClient, err := utils.NewMongoConn(TestMongoAddress, utils.ConnectModePrimary, true)
 		assert.Equal(t, nil, err, "should be equal")
 
 		converter := protocal.NewConverter("raw")
 		assert.Equal(t, true, converter != nil, "should be equal")
 
-		targetClient, err := utils.NewMongoConn(TestMongoAddress, utils.ConnectModePrimary, true)
-		assert.Equal(t, nil, err, "should be equal")
-
 		d := &Dispatcher{
 			batchChan:    make(chan *dynamodbstreams.Record, 100),
 			executorChan: make(chan *ExecuteNode, 100),
 			converter:    converter,
-			targetClient: targetClient,
 			ns: utils.NS{
 				Database:   "utTestDB",
 				Collection: "utTestCollection",
 			},
 			unitTestStr: "test",
 		}
+		d.targetWriter = writer.NewWriter(conf.Options.TargetType, conf.Options.TargetAddress, d.ns, conf.Options.LogLevel)
+		d.targetWriter.DropTable()
 
 		go d.batcher()
 		go d.executor()
@@ -570,8 +580,9 @@ func TestBatcher_Executor(t *testing.T) {
 
 		utils.InitialLogger("", "info", true)
 
+		ckpt := checkpoint.NewWriter(checkpoint.CheckpointWriterTypeFile, "test-ckpt", "test-db")
 		// remove test checkpoint table
-		err := checkpoint.DropCheckpoint(TestMongoAddress, "utTestDB")
+		err := ckpt.DropAll()
 		assert.Equal(t, nil, err, "should be equal")
 
 		converter := protocal.NewConverter("raw")
@@ -584,13 +595,14 @@ func TestBatcher_Executor(t *testing.T) {
 			batchChan:    make(chan *dynamodbstreams.Record, 100),
 			executorChan: make(chan *ExecuteNode, 100),
 			converter:    converter,
-			targetClient: targetClient,
 			ns: utils.NS{
 				Database:   "utTestDB",
 				Collection: "utTestCollection",
 			},
 			unitTestStr: "test",
 		}
+		d.targetWriter = writer.NewWriter(conf.Options.TargetType, conf.Options.TargetAddress, d.ns, conf.Options.LogLevel)
+		d.targetWriter.DropTable()
 
 		go d.batcher()
 		go d.executor()
@@ -700,10 +712,13 @@ func TestBatcher_Executor(t *testing.T) {
 		fmt.Printf("TestBatcher_Executor case %d.\n", nr)
 		nr++
 
+		conf.Options.IncreaseExecutorInsertOnDupUpdate = true
+
 		utils.InitialLogger("", "info", true)
 
+		ckpt := checkpoint.NewWriter(checkpoint.CheckpointWriterTypeFile, "test-ckpt", "test-db")
 		// remove test checkpoint table
-		err := checkpoint.DropCheckpoint(TestMongoAddress, "utTestDB")
+		err := ckpt.DropAll()
 		assert.Equal(t, nil, err, "should be equal")
 
 		converter := protocal.NewConverter("raw")
@@ -711,6 +726,7 @@ func TestBatcher_Executor(t *testing.T) {
 
 		targetClient, err := utils.NewMongoConn(TestMongoAddress, utils.ConnectModePrimary, true)
 		assert.Equal(t, nil, err, "should be equal")
+		targetClient.Session.DB("utTestDB").C("utTestCollection").DropCollection()
 
 		// create index
 		err = targetClient.Session.DB("utTestDB").C("utTestCollection").EnsureIndex(mgo.Index{
@@ -723,13 +739,13 @@ func TestBatcher_Executor(t *testing.T) {
 			batchChan:    make(chan *dynamodbstreams.Record, 100),
 			executorChan: make(chan *ExecuteNode, 100),
 			converter:    converter,
-			targetClient: targetClient,
 			ns: utils.NS{
 				Database:   "utTestDB",
 				Collection: "utTestCollection",
 			},
 			unitTestStr: "test",
 		}
+		d.targetWriter = writer.NewWriter(conf.Options.TargetType, conf.Options.TargetAddress, d.ns, conf.Options.LogLevel)
 
 		go d.batcher()
 		go d.executor()
@@ -793,17 +809,17 @@ func TestBatcher_Executor(t *testing.T) {
 						S: aws.String("value1"),
 					},
 					"test2": {
-						N: aws.String("123"),
+						N: aws.String("124"),
 					},
 				},
-				SequenceNumber: aws.String("102"),
+				SequenceNumber: aws.String("103"),
 			},
 		}
 
 		// wait executor run
 		time.Sleep(3 * time.Second)
 
-		assert.Equal(t, "102", d.checkpointPosition, "should be equal")
+		assert.Equal(t, "103", d.checkpointPosition, "should be equal")
 
 		// output := make(bson.M)
 		var output bson.M
@@ -819,7 +835,7 @@ func TestBatcher_Executor(t *testing.T) {
 				"S": "value1",
 			},
 			"test2": bson.M{
-				"N": "123",
+				"N": "124",
 			},
 		}, output, "should be equal")
 		err = targetClient.Session.DB(d.ns.Database).C(d.ns.Collection).Find(bson.M{"key0.S": "key_value1"}).One(&output)
@@ -843,8 +859,9 @@ func TestBatcher_Executor(t *testing.T) {
 
 		utils.InitialLogger("", "info", true)
 
+		ckpt := checkpoint.NewWriter(checkpoint.CheckpointWriterTypeFile, "test-ckpt", "test-db")
 		// remove test checkpoint table
-		err := checkpoint.DropCheckpoint(TestMongoAddress, "utTestDB")
+		err := ckpt.DropAll()
 		assert.Equal(t, nil, err, "should be equal")
 
 		converter := protocal.NewConverter("raw")
@@ -852,6 +869,7 @@ func TestBatcher_Executor(t *testing.T) {
 
 		targetClient, err := utils.NewMongoConn(TestMongoAddress, utils.ConnectModePrimary, true)
 		assert.Equal(t, nil, err, "should be equal")
+		targetClient.Session.DB("utTestDB").C("utTestCollection").DropCollection()
 
 		// create index
 		err = targetClient.Session.DB("utTestDB").C("utTestCollection").EnsureIndex(mgo.Index{
@@ -864,13 +882,13 @@ func TestBatcher_Executor(t *testing.T) {
 			batchChan:    make(chan *dynamodbstreams.Record, 100),
 			executorChan: make(chan *ExecuteNode, 100),
 			converter:    converter,
-			targetClient: targetClient,
 			ns: utils.NS{
 				Database:   "utTestDB",
 				Collection: "utTestCollection",
 			},
 			unitTestStr: "test",
 		}
+		d.targetWriter = writer.NewWriter(conf.Options.TargetType, conf.Options.TargetAddress, d.ns, conf.Options.LogLevel)
 
 		go d.batcher()
 		go d.executor()
@@ -992,8 +1010,9 @@ func TestBatcher_Executor(t *testing.T) {
 
 		utils.InitialLogger("", "info", true)
 
+		ckpt := checkpoint.NewWriter(checkpoint.CheckpointWriterTypeFile, "test-ckpt", "test-db")
 		// remove test checkpoint table
-		err := checkpoint.DropCheckpoint(TestMongoAddress, "utTestDB")
+		err := ckpt.DropAll()
 		assert.Equal(t, nil, err, "should be equal")
 
 		converter := protocal.NewConverter("raw")
@@ -1001,6 +1020,7 @@ func TestBatcher_Executor(t *testing.T) {
 
 		targetClient, err := utils.NewMongoConn(TestMongoAddress, utils.ConnectModePrimary, true)
 		assert.Equal(t, nil, err, "should be equal")
+		targetClient.Session.DB("utTestDB").C("utTestCollection").DropCollection()
 
 		// create index
 		err = targetClient.Session.DB("utTestDB").C("utTestCollection").EnsureIndex(mgo.Index{
@@ -1013,13 +1033,13 @@ func TestBatcher_Executor(t *testing.T) {
 			batchChan:    make(chan *dynamodbstreams.Record, 100),
 			executorChan: make(chan *ExecuteNode, 100),
 			converter:    converter,
-			targetClient: targetClient,
 			ns: utils.NS{
 				Database:   "utTestDB",
 				Collection: "utTestCollection",
 			},
 			unitTestStr: "test",
 		}
+		d.targetWriter = writer.NewWriter(conf.Options.TargetType, conf.Options.TargetAddress, d.ns, conf.Options.LogLevel)
 
 		go d.batcher()
 		go d.executor()
