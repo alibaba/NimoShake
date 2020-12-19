@@ -42,7 +42,7 @@ var (
 	GlobalFetcherLock     sync.Mutex
 
 	// move from const to var, used for UT
-	BatcherNumber = 1024
+	BatcherNumber = 128
 	BatcherSize   = 2 * utils.MB
 )
 
@@ -337,6 +337,7 @@ func (d *Dispatcher) batcher() {
 		case record, ok = <-d.batchChan:
 		case <-time.After(time.Second * IncrBatcherTimeout):
 			timeout = true
+			record = nil
 		}
 
 		if !ok || timeout {

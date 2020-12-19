@@ -27,6 +27,10 @@ func TestBatcher(t *testing.T) {
 	// test batcher
 	var nr int
 
+	conf.Options.TargetType = utils.TargetTypeMongo
+	conf.Options.TargetAddress = TestMongoAddress
+	conf.Options.LogLevel = "info"
+
 	// simple test
 	{
 		fmt.Printf("TestBatcher case %d.\n", nr)
@@ -41,8 +45,11 @@ func TestBatcher(t *testing.T) {
 			converter:    converter,
 			unitTestStr:  "test",
 		}
+		d.targetWriter = writer.NewWriter(conf.Options.TargetType, conf.Options.TargetAddress, d.ns, conf.Options.LogLevel)
+		d.targetWriter.DropTable()
 
 		go d.batcher()
+
 		d.batchChan <- &dynamodbstreams.Record{
 			EventName: aws.String(EventInsert),
 			Dynamodb: &dynamodbstreams.StreamRecord{
@@ -95,6 +102,8 @@ func TestBatcher(t *testing.T) {
 			converter:    converter,
 			unitTestStr:  "test",
 		}
+		d.targetWriter = writer.NewWriter(conf.Options.TargetType, conf.Options.TargetAddress, d.ns, conf.Options.LogLevel)
+		d.targetWriter.DropTable()
 
 		go d.batcher()
 		// put 1
@@ -162,16 +171,18 @@ func TestBatcher(t *testing.T) {
 		}
 
 		node := <-d.executorChan
-		// fmt.Println(node)
+		fmt.Println(node)
 		assert.Equal(t, EventInsert, node.tp, "should be equal")
 		assert.Equal(t, "101", node.lastSequenceNumber, "should be equal")
+		assert.Equal(t, 2, len(node.index), "should be equal")
 		assert.Equal(t, 2, len(node.operate), "should be equal")
 
 		node = <-d.executorChan
-		// fmt.Println(node)
+		fmt.Println(node)
 		assert.Equal(t, EventRemove, node.tp, "should be equal")
 		assert.Equal(t, "102", node.lastSequenceNumber, "should be equal")
-		assert.Equal(t, 1, len(node.operate), "should be equal")
+		assert.Equal(t, 1, len(node.index), "should be equal")
+		assert.Equal(t, 0, len(node.operate), "should be equal")
 
 		timeout := false
 		select {
@@ -196,6 +207,8 @@ func TestBatcher(t *testing.T) {
 			converter:    converter,
 			unitTestStr:  "test",
 		}
+		d.targetWriter = writer.NewWriter(conf.Options.TargetType, conf.Options.TargetAddress, d.ns, conf.Options.LogLevel)
+		d.targetWriter.DropTable()
 
 		BatcherNumber = 3
 
@@ -289,12 +302,14 @@ func TestBatcher(t *testing.T) {
 		assert.Equal(t, EventInsert, node.tp, "should be equal")
 		assert.Equal(t, "102", node.lastSequenceNumber, "should be equal")
 		assert.Equal(t, 3, len(node.operate), "should be equal")
+		assert.Equal(t, 3, len(node.index), "should be equal")
 
 		node = <-d.executorChan
 		// fmt.Println(node)
 		assert.Equal(t, EventInsert, node.tp, "should be equal")
 		assert.Equal(t, "103", node.lastSequenceNumber, "should be equal")
 		assert.Equal(t, 1, len(node.operate), "should be equal")
+		assert.Equal(t, 1, len(node.index), "should be equal")
 
 		timeout := false
 		select {
@@ -319,6 +334,8 @@ func TestBatcher(t *testing.T) {
 			converter:    converter,
 			unitTestStr:  "test",
 		}
+		d.targetWriter = writer.NewWriter(conf.Options.TargetType, conf.Options.TargetAddress, d.ns, conf.Options.LogLevel)
+		d.targetWriter.DropTable()
 
 		BatcherNumber = 100
 
@@ -359,6 +376,7 @@ func TestBatcher(t *testing.T) {
 		assert.Equal(t, EventInsert, node.tp, "should be equal")
 		assert.Equal(t, "105", node.lastSequenceNumber, "should be equal")
 		assert.Equal(t, 1, len(node.operate), "should be equal")
+		assert.Equal(t, 1, len(node.index), "should be equal")
 	}
 }
 
