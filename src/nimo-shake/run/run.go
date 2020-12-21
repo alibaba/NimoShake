@@ -26,7 +26,7 @@ func Start() {
 	}
 
 	// check writer connection
-	w := writer.NewWriter(conf.Options.TargetType, conf.Options.TargetAddress, utils.NS{"dynamo", "test"}, conf.Options.LogLevel)
+	w := writer.NewWriter(conf.Options.TargetType, conf.Options.TargetAddress, utils.NS{"nimo-shake", "shake_writer_test"}, conf.Options.LogLevel)
 	if w == nil {
 		LOG.Crashf("connect type[%v] address[%v] failed[%v]", conf.Options.TargetType, conf.Options.TargetAddress)
 	}

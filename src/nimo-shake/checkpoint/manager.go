@@ -267,7 +267,7 @@ func PrepareFullSyncCkpt(ckptManager Writer, dynamoSession *dynamodb.DynamoDB,
 					SequenceNumber: "",
 					Status:         StatusNotProcess,
 					WorkerId:       "unknown-worker",
-					IteratorType:   IteratorTypeSequence,
+					IteratorType:   IteratorTypeAtSequence,
 				}
 
 				if node.Shard.SequenceNumberRange.EndingSequenceNumber != nil {
@@ -286,7 +286,18 @@ func PrepareFullSyncCkpt(ckptManager Writer, dynamoSession *dynamodb.DynamoDB,
 					if err != nil {
 						return fmt.Errorf("construct shard[%v] iterator failed[%v]", node.Shard.ShardId, err)
 					}
-					ckpt.ShardIt = *outShardIt.ShardIterator
+					// ckpt.ShardIt = *outShardIt.ShardIterator
+					ckpt.ShardIt = "see sequence number"
+
+					// fetch sequence number based on first record
+					if seq, err := fetchSeqNumber(outShardIt.ShardIterator, dynamoStreams); err != nil {
+						return fmt.Errorf("fetch shard[%v] sequence number failed[%v]", node.Shard.ShardId, err)
+					} else if seq != "" {
+						ckpt.SequenceNumber = seq
+					} else {
+						// set the shard start sequence number as sequence number if no data return
+						ckpt.SequenceNumber = *node.Shard.SequenceNumberRange.StartingSequenceNumber
+					}
 
 					// set shard iterator map which will be used in incr-sync
 					GlobalShardIteratorMap.Set(*node.Shard.ShardId, *outShardIt.ShardIterator)
@@ -315,4 +326,29 @@ func PrepareFullSyncCkpt(ckptManager Writer, dynamoSession *dynamodb.DynamoDB,
 	}
 
 	return streamMap, nil
+}
+
+// fetch first sequence number based on given shardIt
+func fetchSeqNumber(shardIt *string, dynamoStreams *dynamodbstreams.DynamoDBStreams) (string, error) {
+	// retry 5 times
+	for i := 0; i < 5; i++ {
+		records, err := dynamoStreams.GetRecords(&dynamodbstreams.GetRecordsInput{
+			ShardIterator: shardIt,
+			Limit:         aws.Int64(1),
+		})
+		if err != nil {
+			return "", err
+		}
+
+		if len(records.Records) > 0 {
+			return *records.Records[0].Dynamodb.SequenceNumber, nil
+		}
+		time.Sleep(5 * time.Second)
+
+		shardIt = records.NextShardIterator
+	}
+
+
+	// what if no data? return empty
+	return "", nil
 }

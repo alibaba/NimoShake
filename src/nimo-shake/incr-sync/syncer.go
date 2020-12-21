@@ -222,16 +222,27 @@ func (d *Dispatcher) Run() {
 				 */
 				LOG.Crashf("%s shard[%v] iterator type[%v] abnormal, status[%v], need full sync", d.String(),
 					*d.shard.Shard.ShardId, ckpt.IteratorType, ckpt.Status)
+			} else if ckpt.ShardIt == "see sequence number" {
+				// means generate new shardIt
+				shardItOut, err := d.dynamoStreamSession.GetShardIterator(&dynamodbstreams.GetShardIteratorInput{
+					ShardId:           d.shard.Shard.ShardId,
+					SequenceNumber:    aws.String(ckpt.SequenceNumber),
+					ShardIteratorType: aws.String(checkpoint.IteratorTypeAtSequence),
+					StreamArn:         aws.String(d.shard.ShardArn),
+				})
+				if err != nil {
+					LOG.Crashf("%s get shard iterator failed[%v]", d.String(), err)
+				}
+				shardIt = *shardItOut.ShardIterator
 			} else {
 				// dynamodb rule: this is only used when restart in 30 minutes
 				shardIt = ckpt.ShardIt
 			}
 		} else {
 			shardItOut, err := d.dynamoStreamSession.GetShardIterator(&dynamodbstreams.GetShardIteratorInput{
-				ShardId: d.shard.Shard.ShardId,
-				// SequenceNumber:    d.shard.Shard.SequenceNumberRange.StartingSequenceNumber,
+				ShardId:           d.shard.Shard.ShardId,
 				SequenceNumber:    aws.String(ckpt.SequenceNumber),
-				ShardIteratorType: aws.String(checkpoint.IteratorTypeSequence),
+				ShardIteratorType: aws.String(checkpoint.IteratorTypeAfterSequence),
 				StreamArn:         aws.String(d.shard.ShardArn),
 			})
 			if err != nil {
@@ -502,7 +513,7 @@ func (d *Dispatcher) ckptManager() {
 
 			ckpt = map[string]interface{}{
 				checkpoint.FieldSeqNum:       d.checkpointPosition,
-				checkpoint.FieldIteratorType: checkpoint.IteratorTypeSequence,
+				checkpoint.FieldIteratorType: checkpoint.IteratorTypeAtSequence,
 				checkpoint.FieldTimestamp:    time.Now().Format(utils.GolangSecurityTime),
 			}
 		}
