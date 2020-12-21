@@ -112,7 +112,7 @@ func (ts *tableSyncer) Sync() {
 	for i := 0; i < int(conf.Options.FullDocumentConcurrency); i++ {
 		go func(id int) {
 			LOG.Info("%s create document syncer with id[%v]", ts, id)
-			ds := NewDocumentSyncer(ts.id, ts.ns.Collection, id, ts.parserChan)
+			ds := NewDocumentSyncer(ts.id, ts.ns.Collection, id, ts.parserChan, ts.sourceTableDescribe)
 			ds.Run()
 			LOG.Info("%s document syncer with id[%v] exit", ts, id)
 			wgWriter.Done()

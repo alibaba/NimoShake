@@ -8,6 +8,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/stretchr/testify/assert"
 	"github.com/vinllen/mgo/bson"
+	"strconv"
 )
 
 func TestRawConverter(t *testing.T) {
@@ -31,7 +32,7 @@ func TestRawConverter(t *testing.T) {
 			"test": bson.M{
 				"N": "12345",
 			},
-		}, out.Data, "should be equal")
+		}, out.(RawData).Data, "should be equal")
 	}
 
 	{
@@ -57,7 +58,7 @@ func TestRawConverter(t *testing.T) {
 			"fuck": bson.M {
 				"S": "hello",
 			},
-		}, out.Data, "should be equal")
+		}, out.(RawData).Data, "should be equal")
 	}
 
 	{
@@ -119,7 +120,7 @@ func TestRawConverter(t *testing.T) {
 					{0, 1, 2, 0, 5},
 				},
 			},
-		}, out.Data, "should be equal")
+		}, out.(RawData).Data, "should be equal")
 	}
 
 	{
@@ -181,7 +182,7 @@ func TestRawConverter(t *testing.T) {
 			"test-NULL": bson.M {
 				"NULL": false,
 			},
-		}, out.Data, "should be equal")
+		}, out.(RawData).Data, "should be equal")
 	}
 }
 
@@ -202,9 +203,45 @@ func TestTypeConverter(t *testing.T) {
 		rc := new(TypeConverter)
 		out, err := rc.Run(src)
 		assert.Equal(t, nil, err, "should be equal")
+		val, err := bson.ParseDecimal128("12345")
+		assert.Equal(t, nil, err, "should be equal")
 		assert.Equal(t, bson.M{
-			"test": float64(12345),
-		}, out.Data, "should be equal")
+			"test": val,
+		}, out.(RawData).Data, "should be equal")
+	}
+
+	{
+		fmt.Printf("TestTypeConverter case %d.\n", nr)
+		nr++
+
+		src := map[string]*dynamodb.AttributeValue{
+			"test": {
+				N: aws.String("123456789101112131415161718192021"),
+			},
+			"test2": {
+				N: aws.String("3.141592653589793238462643383279"),
+			},
+			"test3": {
+				N: aws.String("3.1415926535897932384626433832795012345"),
+			},
+		}
+
+		rc := new(TypeConverter)
+		out, err := rc.Run(src)
+		assert.Equal(t, nil, err, "should be equal")
+		val, err := bson.ParseDecimal128("123456789101112131415161718192021")
+		assert.Equal(t, nil, err, "should be equal")
+		val2, err := bson.ParseDecimal128("3.141592653589793238462643383279")
+		assert.Equal(t, nil, err, "should be equal")
+		val3, err := strconv.ParseFloat("3.1415926535897932384626433832795012345", 64)
+		assert.Equal(t, nil, err, "should be equal")
+		val3_2, err := bson.ParseDecimal128(fmt.Sprintf("%v", val3))
+		assert.Equal(t, nil, err, "should be equal")
+		assert.Equal(t, bson.M{
+			"test": val,
+			"test2": val2,
+			"test3": val3_2,
+		}, out.(RawData).Data, "should be equal")
 	}
 
 	{
@@ -223,10 +260,12 @@ func TestTypeConverter(t *testing.T) {
 		rc := new(TypeConverter)
 		out, err := rc.Run(src)
 		assert.Equal(t, nil, err, "should be equal")
+		val, err := bson.ParseDecimal128("12345")
+		assert.Equal(t, nil, err, "should be equal")
 		assert.Equal(t, bson.M{
-			"test": float64(12345),
+			"test": val,
 			"fuck": "hello",
-		}, out.Data, "should be equal")
+		}, out.(RawData).Data, "should be equal")
 	}
 
 	{
@@ -263,18 +302,26 @@ func TestTypeConverter(t *testing.T) {
 		rc := new(TypeConverter)
 		out, err := rc.Run(src)
 		assert.Equal(t, nil, err, "should be equal")
+		val, err := bson.ParseDecimal128("12345")
+		assert.Equal(t, nil, err, "should be equal")
+		val2, err := bson.ParseDecimal128("123")
+		assert.Equal(t, nil, err, "should be equal")
+		val3, err := bson.ParseDecimal128("456")
+		assert.Equal(t, nil, err, "should be equal")
+		val4, err := bson.ParseDecimal128("789999999999")
+		assert.Equal(t, nil, err, "should be equal")
 		assert.Equal(t, bson.M{
-			"test": float64(12345),
+			"test": val,
 			"fuck": "hello",
 			"test-string-list": []string{"z1", "z2", "z3"},
-			"test-number-list": []float64{123, 456, 789999999999},
+			"test-number-list": []bson.Decimal128{val2, val3, val4},
 			"test-bool": true,
 			"test-byte": []byte{123, 45, 78, 0, 12},
 			"test-byte-list": [][]byte{
 				{123, 33, 44, 0, 55},
 				{0, 1, 2, 0, 5},
 			},
-		}, out.Data, "should be equal")
+		}, out.(RawData).Data, "should be equal")
 	}
 
 	{
@@ -321,20 +368,26 @@ func TestTypeConverter(t *testing.T) {
 		rc := new(TypeConverter)
 		out, err := rc.Run(src)
 		assert.Equal(t, nil, err, "should be equal")
+		val, err := bson.ParseDecimal128("12345")
+		assert.Equal(t, nil, err, "should be equal")
+		val2, err := bson.ParseDecimal128("12345000")
+		assert.Equal(t, nil, err, "should be equal")
+		val3, err := bson.ParseDecimal128("567")
+		assert.Equal(t, nil, err, "should be equal")
 		assert.Equal(t, bson.M{
-			"test": float64(12345),
+			"test": val,
 			"test-inner-struct": []interface{} {
 				"hello-inner",
 				[]string{"zi1", "zi2", "zi3"},
 			},
 			"test-inner-map": bson.M {
-				"test": float64(12345000),
+				"test": val2,
 			},
 			"test-NULL": false,
 			"N": bson.M {
-				"NN": float64(567),
+				"NN": val3,
 				"M": "899",
 			},
-		}, out.Data, "should be equal")
+		}, out.(RawData).Data, "should be equal")
 	}
 }

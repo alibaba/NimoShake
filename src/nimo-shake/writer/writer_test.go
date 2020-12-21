@@ -4,18 +4,14 @@ import (
 	"testing"
 	"fmt"
 	"reflect"
-	"net/http"
-	"time"
 	"nimo-shake/common"
 	"nimo-shake/configure"
 
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/stretchr/testify/assert"
-	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/vinllen/mgo"
 	"github.com/vinllen/mgo/bson"
-	"strconv"
 )
 
 const (
@@ -482,6 +478,7 @@ func TestMongo(t *testing.T) {
 	}
 }
 
+/*
 func TestDynamo(t *testing.T) {
 	var nr int
 
@@ -568,7 +565,7 @@ func TestDynamo(t *testing.T) {
 
 		dynamoWriter.Close()
 
-		/************************************************/
+		//
 		// test simple CRUD
 		input := []interface{}{
 			map[string]*dynamodb.AttributeValue{
@@ -735,7 +732,6 @@ func TestDynamo(t *testing.T) {
 
 		dynamoWriter.Close()
 
-		/************************************************/
 		// CRUD
 
 		// insert 1-10
@@ -1068,7 +1064,6 @@ func TestDynamo(t *testing.T) {
 
 			dynamoWriter.Close()
 
-			/************************************************/
 			// CRUD
 
 			// insert 1-10
@@ -1136,7 +1131,7 @@ func TestDynamo(t *testing.T) {
 			}
 		}
 	}
-}
+}*/
 
 func checkTableExist(conn *utils.MongoConn, table string) (bool, error) {
 	list, err := conn.Session.DB(TestWriteDb).CollectionNames()

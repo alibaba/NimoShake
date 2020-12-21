@@ -61,6 +61,9 @@ func (dpw *DynamoProxyWriter) GetSession() interface{} {
 	return dpw.svc
 }
 
+func (dpw *DynamoProxyWriter) PassTableDesc(tableDescribe *dynamodb.TableDescription) {
+}
+
 func (dpw *DynamoProxyWriter) CreateTable(tableDescribe *dynamodb.TableDescription) error {
 	createTableInput := &dynamodb.CreateTableInput{
 		AttributeDefinitions: tableDescribe.AttributeDefinitions,

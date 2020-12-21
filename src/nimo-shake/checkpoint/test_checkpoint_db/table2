@@ -1,0 +1,2 @@
+{"ShardId":"id1","FatherId":"","SeqNum":"","Status":"done","WorkerId":"","IteratorType":"","ShardIt":"","UpdateDate":""}
+{"ShardId":"id10","FatherId":"","SeqNum":"","Status":"wait father finish","WorkerId":"","IteratorType":"","ShardIt":"","UpdateDate":""}

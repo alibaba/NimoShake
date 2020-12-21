@@ -45,6 +45,10 @@ func (mw *MongoWriter) GetSession() interface{} {
 	return mw.conn.Session
 }
 
+func (mw *MongoWriter) PassTableDesc(tableDescribe *dynamodb.TableDescription) {
+	mw.primaryIndexes = tableDescribe.KeySchema
+}
+
 func (mw *MongoWriter) CreateTable(tableDescribe *dynamodb.TableDescription) error {
 	// parse primary key with sort key
 	allIndexes := tableDescribe.AttributeDefinitions
@@ -103,7 +107,7 @@ func (mw *MongoWriter) WriteBulk(input []interface{}) error {
 
 	if err := mw.conn.Session.DB(mw.ns.Database).C(mw.ns.Collection).Insert(input...); err != nil {
 		if mgo.IsDup(err) {
-			LOG.Warn("%s duplicated document found. reinsert or update", mw)
+			LOG.Warn("%s duplicated document found[%v]. reinsert or update", err, mw)
 			if !conf.Options.FullExecutorInsertOnDupUpdate || len(mw.primaryIndexes) == 0 {
 				LOG.Error("full.executor.insert_on_dup_update==[%v], primaryIndexes length[%v]", conf.Options.FullExecutorInsertOnDupUpdate,
 					len(mw.primaryIndexes))
