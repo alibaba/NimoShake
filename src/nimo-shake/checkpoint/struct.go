@@ -26,6 +26,8 @@ const (
 	IteratorTypeAtSequence    = "AT_SEQUENCE_NUMBER"
 	IteratorTypeAfterSequence = "AFTER_SEQUENCE_NUMBER"
 
+	InitShardIt = "see sequence number"
+
 	StreamViewType = "NEW_AND_OLD_IMAGES"
 
 	FieldShardId      = "ShardId"

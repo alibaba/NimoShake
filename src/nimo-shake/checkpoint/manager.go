@@ -287,10 +287,10 @@ func PrepareFullSyncCkpt(ckptManager Writer, dynamoSession *dynamodb.DynamoDB,
 						return fmt.Errorf("construct shard[%v] iterator failed[%v]", node.Shard.ShardId, err)
 					}
 					// ckpt.ShardIt = *outShardIt.ShardIterator
-					ckpt.ShardIt = "see sequence number"
+					ckpt.ShardIt = InitShardIt
 
 					// fetch sequence number based on first record
-					if seq, err := fetchSeqNumber(outShardIt.ShardIterator, dynamoStreams); err != nil {
+					if seq, err := fetchSeqNumber(outShardIt.ShardIterator, dynamoStreams, node.Table); err != nil {
 						return fmt.Errorf("fetch shard[%v] sequence number failed[%v]", node.Shard.ShardId, err)
 					} else if seq != "" {
 						ckpt.SequenceNumber = seq
@@ -299,8 +299,9 @@ func PrepareFullSyncCkpt(ckptManager Writer, dynamoSession *dynamodb.DynamoDB,
 						ckpt.SequenceNumber = *node.Shard.SequenceNumberRange.StartingSequenceNumber
 					}
 
+					// v1.0.4: do not set
 					// set shard iterator map which will be used in incr-sync
-					GlobalShardIteratorMap.Set(*node.Shard.ShardId, *outShardIt.ShardIterator)
+					// GlobalShardIteratorMap.Set(*node.Shard.ShardId, *outShardIt.ShardIterator)
 
 					LOG.Info("insert table[%v] checkpoint[%v]", *stream.TableName, *ckpt)
 					if err = ckptManager.Insert(ckpt, *stream.TableName); err != nil {
@@ -329,7 +330,8 @@ func PrepareFullSyncCkpt(ckptManager Writer, dynamoSession *dynamodb.DynamoDB,
 }
 
 // fetch first sequence number based on given shardIt
-func fetchSeqNumber(shardIt *string, dynamoStreams *dynamodbstreams.DynamoDBStreams) (string, error) {
+func fetchSeqNumber(shardIt *string, dynamoStreams *dynamodbstreams.DynamoDBStreams, table string) (string, error) {
+	LOG.Info("fetch sequence number of shard[%v] table[%v]", *shardIt, table)
 	// retry 5 times
 	for i := 0; i < 5; i++ {
 		records, err := dynamoStreams.GetRecords(&dynamodbstreams.GetRecordsInput{
@@ -347,7 +349,7 @@ func fetchSeqNumber(shardIt *string, dynamoStreams *dynamodbstreams.DynamoDBStre
 
 		shardIt = records.NextShardIterator
 	}
-
+	LOG.Info("fetch sequence number of shard[%v] table[%v]: not found, return empty", *shardIt, table)
 
 	// what if no data? return empty
 	return "", nil
