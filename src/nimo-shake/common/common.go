@@ -15,12 +15,6 @@ const (
 	ConvertTypeChange = "change"
 	ConvertTypeSame   = "same" // used in dynamodb -> dynamo-proxy
 
-	KB = 1024
-	MB = 1024 * KB
-	GB = 1024 * MB
-	TB = 1024 * GB
-	PB = 1024 * TB
-
 	SyncModeAll  = "all"
 	SyncModeFull = "full"
 	SyncModeIncr = "incr"

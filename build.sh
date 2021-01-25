@@ -40,7 +40,7 @@ run_builder='go build -v'
 modules=(nimo-shake nimo-full-check)
 #modules=(nimo-shake)
 
-goos=(linux darwin windows)
+goos=(linux darwin)
 for g in "${goos[@]}"; do
     export GOOS=$g
     echo "try build goos=$g"

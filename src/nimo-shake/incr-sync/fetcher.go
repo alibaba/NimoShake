@@ -22,9 +22,10 @@ type Fetcher struct {
 	stream       *dynamodbstreams.Stream
 	shardChan    chan *utils.ShardNode
 	ckptWriter   checkpoint.Writer
+	metric *utils.ReplicationMetric
 }
 
-func NewFetcher(table string, stream *dynamodbstreams.Stream, shardChan chan *utils.ShardNode, ckptWriter checkpoint.Writer) *Fetcher {
+func NewFetcher(table string, stream *dynamodbstreams.Stream, shardChan chan *utils.ShardNode, ckptWriter checkpoint.Writer, metric *utils.ReplicationMetric) *Fetcher {
 	// create dynamo stream client
 	dynamoStreamSession, err := utils.CreateDynamoStreamSession(conf.Options.LogLevel)
 	if err != nil {
@@ -38,6 +39,7 @@ func NewFetcher(table string, stream *dynamodbstreams.Stream, shardChan chan *ut
 		stream:       stream,
 		shardChan:    shardChan,
 		ckptWriter:   ckptWriter,
+		metric: metric,
 	}
 }
 

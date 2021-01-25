@@ -1,13 +1,15 @@
 package conf
 
 type Configuration struct {
+	ConfVersion                       uint   `config:"conf.version"` // do not modify the tag name
 	Id                                string `config:"id"`
 	LogFile                           string `config:"log.file"`
 	LogLevel                          string `config:"log.level"`
 	LogBuffer                         bool   `config:"log.buffer"`
 	PidPath                           string `config:"pid_path"`
 	SystemProfile                     int    `config:"system_profile"`
-	HttpProfile                       int    `config:"http_profile"`
+	FullSyncHTTPListenPort            int    `config:"full_sync.http_port"`
+	IncrSyncHTTPListenPort            int    `config:"incr_sync.http_port"`
 	SyncMode                          string `config:"sync_mode"`
 	SourceAccessKeyID                 string `config:"source.access_key_id"`
 	SourceSecretAccessKey             string `config:"source.secret_access_key"`
