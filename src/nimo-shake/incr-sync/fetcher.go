@@ -112,7 +112,7 @@ func (f *Fetcher) Run() {
 					Status:         checkpoint.StatusPrepareProcess,
 					WorkerId:       "unknown",
 					FatherId:       father,
-					IteratorType:   checkpoint.IteratorTypeSequence,
+					IteratorType:   checkpoint.IteratorTypeAtSequence,
 					UpdateDate:     "", // empty at first
 				}
 				f.ckptWriter.Insert(newCkpt, f.table)
@@ -138,7 +138,7 @@ func (f *Fetcher) Run() {
 				LOG.Info("status need to process: %v", *ckpt)
 				ckpt.SequenceNumber = *node.Shard.SequenceNumberRange.StartingSequenceNumber
 				ckpt.Status = checkpoint.StatusPrepareProcess
-				ckpt.IteratorType = checkpoint.IteratorTypeSequence
+				ckpt.IteratorType = checkpoint.IteratorTypeAtSequence
 				f.ckptWriter.Update(ckpt.ShardId, ckpt, f.table)
 				shardList = append(shardList, node)
 				return utils.StopTraverseSonErr

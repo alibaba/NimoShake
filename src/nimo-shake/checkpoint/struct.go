@@ -22,8 +22,11 @@ const (
 	StatusWaitFather     = "wait father finish"
 	StatusDone           = "done"
 
-	IteratorTypeLatest   = "LATEST"
-	IteratorTypeSequence = "AT_SEQUENCE_NUMBER"
+	IteratorTypeLatest        = "LATEST"
+	IteratorTypeAtSequence    = "AT_SEQUENCE_NUMBER"
+	IteratorTypeAfterSequence = "AFTER_SEQUENCE_NUMBER"
+
+	InitShardIt = "see sequence number"
 
 	StreamViewType = "NEW_AND_OLD_IMAGES"
 

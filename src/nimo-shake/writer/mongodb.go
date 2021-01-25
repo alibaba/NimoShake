@@ -175,7 +175,7 @@ func (mw *MongoWriter) updateOnInsert(input []interface{}, index []interface{}) 
 		LOG.Debug("upsert: selector[%v] update[%v]", index[i], input[i])
 		_, err := mw.conn.Session.DB(mw.ns.Database).C(mw.ns.Collection).Upsert(index[i], input[i])
 		if err != nil {
-			if utils.MongodbIgnoreError(err, "u", false) {
+			if utils.MongodbIgnoreError(err, "u", true) {
 				LOG.Warn("%s ignore error[%v] when upsert", mw, err)
 				return nil
 			}
@@ -193,7 +193,8 @@ func (mw *MongoWriter) Delete(index []interface{}) error {
 
 	if _, err := bulk.Run(); err != nil {
 		LOG.Warn(err)
-		if utils.MongodbIgnoreError(err, "d", false) {
+		// always ignore ns not found error
+		if utils.MongodbIgnoreError(err, "d", true) {
 			LOG.Warn("%s ignore error[%v] when delete", mw, err)
 			return nil
 		}
@@ -226,7 +227,8 @@ func (mw *MongoWriter) Update(input []interface{}, index []interface{}) error {
 			return err
 		}
 
-		if utils.MongodbIgnoreError(err, "u", false) {
+		// always upsert data
+		if utils.MongodbIgnoreError(err, "u", true) {
 			return mw.updateOnInsert(input[idx:], index[idx:])
 		}
 

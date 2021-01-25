@@ -184,21 +184,24 @@ func (d *Dispatcher) Run() {
 
 	LOG.Info("%s begins, check father shard[%v] status", d.String(), father)
 
-	// check father finished
-	for {
-		fatherCkpt, err := d.ckptWriter.Query(father, d.ns.Collection)
-		if err != nil && err.Error() != utils.NotFountErr {
-			LOG.Crashf("%s query father[%v] checkpoint fail[%v]", d.String(), father, err)
-		}
+	if father != "" {
+		// check father finished
+		for {
+			fatherCkpt, err := d.ckptWriter.Query(father, d.ns.Collection)
+			if err != nil && err.Error() != utils.NotFountErr {
+				LOG.Crashf("%s query father[%v] checkpoint fail[%v]", d.String(), father, err)
+			}
 
-		// err != nil means utils.NotFountErr
-		if err != nil || !checkpoint.IsStatusProcessing(fatherCkpt.Status) {
-			break
-		}
+			// err != nil means utils.NotFountErr
+			if err != nil || !checkpoint.IsStatusProcessing(fatherCkpt.Status) {
+				break
+			}
 
-		LOG.Warn("%s father shard[%v] is still running, waiting...", d.String(), father)
-		time.Sleep(WaitFatherFinishInterval * time.Second)
+			LOG.Warn("%s father shard[%v] is still running, waiting...", d.String(), father)
+			time.Sleep(WaitFatherFinishInterval * time.Second)
+		}
 	}
+
 	LOG.Info("%s father shard[%v] finished", d.String(), father)
 
 	// fetch shardIt
@@ -222,16 +225,27 @@ func (d *Dispatcher) Run() {
 				 */
 				LOG.Crashf("%s shard[%v] iterator type[%v] abnormal, status[%v], need full sync", d.String(),
 					*d.shard.Shard.ShardId, ckpt.IteratorType, ckpt.Status)
+			} else if ckpt.ShardIt == checkpoint.InitShardIt {
+				// means generate new shardIt
+				shardItOut, err := d.dynamoStreamSession.GetShardIterator(&dynamodbstreams.GetShardIteratorInput{
+					ShardId:           d.shard.Shard.ShardId,
+					SequenceNumber:    aws.String(ckpt.SequenceNumber),
+					ShardIteratorType: aws.String(checkpoint.IteratorTypeAtSequence),
+					StreamArn:         aws.String(d.shard.ShardArn),
+				})
+				if err != nil {
+					LOG.Crashf("%s get shard iterator failed[%v]", d.String(), err)
+				}
+				shardIt = *shardItOut.ShardIterator
 			} else {
 				// dynamodb rule: this is only used when restart in 30 minutes
 				shardIt = ckpt.ShardIt
 			}
 		} else {
 			shardItOut, err := d.dynamoStreamSession.GetShardIterator(&dynamodbstreams.GetShardIteratorInput{
-				ShardId: d.shard.Shard.ShardId,
-				// SequenceNumber:    d.shard.Shard.SequenceNumberRange.StartingSequenceNumber,
+				ShardId:           d.shard.Shard.ShardId,
 				SequenceNumber:    aws.String(ckpt.SequenceNumber),
-				ShardIteratorType: aws.String(checkpoint.IteratorTypeSequence),
+				ShardIteratorType: aws.String(checkpoint.IteratorTypeAfterSequence),
 				StreamArn:         aws.String(d.shard.ShardArn),
 			})
 			if err != nil {
@@ -502,7 +516,7 @@ func (d *Dispatcher) ckptManager() {
 
 			ckpt = map[string]interface{}{
 				checkpoint.FieldSeqNum:       d.checkpointPosition,
-				checkpoint.FieldIteratorType: checkpoint.IteratorTypeSequence,
+				checkpoint.FieldIteratorType: checkpoint.IteratorTypeAtSequence,
 				checkpoint.FieldTimestamp:    time.Now().Format(utils.GolangSecurityTime),
 			}
 		}
