@@ -58,6 +58,11 @@ func main() {
 		crash(fmt.Sprintf("Conf.Options check failed: %s", err.Error()), -4)
 	}
 
+	// read fcv and do comparison
+	if _, err := conf.CheckFcv(*configuration, utils.FcvConfiguration.FeatureCompatibleVersion); err != nil {
+		crash(err.Error(), -5)
+	}
+
 	utils.Welcome()
 	utils.StartTime = fmt.Sprintf("%v", time.Now().Format(utils.GolangSecurityTime))
 
@@ -72,6 +77,8 @@ func main() {
 	} else {
 		LOG.Info("%v configuration: %s", conf.Options.Id, string(opts))
 	}
+
+	nimo.Profiling(int(conf.Options.SystemProfile))
 
 	run.Start()
 

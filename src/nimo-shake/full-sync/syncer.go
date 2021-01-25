@@ -4,6 +4,7 @@ import (
 	"sync"
 	"time"
 	"fmt"
+	"strings"
 
 	"nimo-shake/common"
 	"nimo-shake/configure"
@@ -15,7 +16,12 @@ import (
 	"github.com/vinllen/mgo/bson"
 	"github.com/vinllen/mgo"
 	"github.com/aws/aws-sdk-go/aws"
-	"strings"
+	"github.com/gugemichael/nimo4go"
+)
+
+var (
+	metricNsMapLock sync.Mutex
+	metricNsMap = make(map[string]*utils.CollectionMetric) // namespace map: db.collection -> collection metric
 )
 
 func Start(dynamoSession *dynamodb.DynamoDB, w writer.Writer) {
@@ -38,6 +44,12 @@ func Start(dynamoSession *dynamodb.DynamoDB, w writer.Writer) {
 
 	LOG.Info("start syncing: %v", tableList)
 
+	metricNsMapLock.Lock()
+	for _, table := range tableList {
+		metricNsMap[table] = utils.NewCollectionMetric()
+	}
+	metricNsMapLock.Unlock()
+
 	fullChan := make(chan string, len(tableList))
 	for _, table := range tableList {
 		fullChan <- table
@@ -54,7 +66,8 @@ func Start(dynamoSession *dynamodb.DynamoDB, w writer.Writer) {
 					break
 				}
 
-				ts := NewTableSyncer(id, table)
+				// no need to lock map because the map size won't change
+				ts := NewTableSyncer(id, table, metricNsMap[table])
 				if ts == nil {
 					LOG.Crashf("tableSyncer[%v] create failed", id)
 				}
@@ -179,4 +192,46 @@ func checkTableExists(tableList []string, w writer.Writer) error {
 	LOG.Info("finish handling table exists")
 
 	return nil
+}
+
+func RestAPI() {
+	type FullSyncInfo struct {
+		Progress             string            `json:"progress"`                     // synced_collection_number / total_collection_number
+		TotalCollection      int               `json:"total_collection_number"`      // total collection
+		FinishedCollection   int               `json:"finished_collection_number"`   // finished
+		ProcessingCollection int               `json:"processing_collection_number"` // in processing
+		WaitCollection       int               `json:"wait_collection_number"`       // wait start
+		CollectionMetric     map[string]string `json:"collection_metric"`            // collection_name -> process
+	}
+
+	utils.FullSyncHttpApi.RegisterAPI("/progress", nimo.HttpGet, func([]byte) interface{} {
+		ret := FullSyncInfo{
+			CollectionMetric: make(map[string]string),
+		}
+
+		metricNsMapLock.Lock()
+		defer metricNsMapLock.Unlock()
+
+		ret.TotalCollection = len(metricNsMap)
+		for ns, collectionMetric := range metricNsMap {
+			ret.CollectionMetric[ns] = collectionMetric.String()
+			switch collectionMetric.CollectionStatus {
+			case utils.StatusWaitStart:
+				ret.WaitCollection += 1
+			case utils.StatusProcessing:
+				ret.ProcessingCollection += 1
+			case utils.StatusFinish:
+				ret.FinishedCollection += 1
+			}
+		}
+
+		if ret.TotalCollection == 0 {
+			ret.Progress = "-%"
+		} else {
+			ret.Progress = fmt.Sprintf("%.2f%%", float64(ret.FinishedCollection) / float64(ret.TotalCollection) * 100)
+		}
+
+		return ret
+	})
+
 }

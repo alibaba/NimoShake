@@ -11,6 +11,7 @@ import (
 	LOG "github.com/vinllen/log4go"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"nimo-shake/protocal"
+	"sync/atomic"
 )
 
 const (
@@ -20,21 +21,23 @@ const (
 )
 
 var (
-	UT_TestDocumentSyncer = false
+	UT_TestDocumentSyncer      = false
 	UT_TestDocumentSyncer_Chan chan []interface{}
 )
 
 /*------------------------------------------------------*/
 // one document link corresponding to one documentSyncer
 type documentSyncer struct {
-	tableSyncerId int
-	id            int // documentSyncer id
-	ns            utils.NS
-	inputChan     chan interface{} // parserChan in table-syncer
-	writer        writer.Writer
+	tableSyncerId    int
+	id               int // documentSyncer id
+	ns               utils.NS
+	inputChan        chan interface{} // parserChan in table-syncer
+	writer           writer.Writer
+	collectionMetric *utils.CollectionMetric
 }
 
-func NewDocumentSyncer(tableSyncerId int, table string, id int, inputChan chan interface{}, tableDescribe *dynamodb.TableDescription) *documentSyncer {
+func NewDocumentSyncer(tableSyncerId int, table string, id int, inputChan chan interface{},
+	tableDescribe *dynamodb.TableDescription, collectionMetric *utils.CollectionMetric) *documentSyncer {
 	ns := utils.NS{
 		Database:   conf.Options.Id,
 		Collection: table,
@@ -48,11 +51,12 @@ func NewDocumentSyncer(tableSyncerId int, table string, id int, inputChan chan i
 	w.PassTableDesc(tableDescribe)
 
 	return &documentSyncer{
-		tableSyncerId: tableSyncerId,
-		id:            id,
-		inputChan:     inputChan,
-		writer:        w,
-		ns:            ns,
+		tableSyncerId:    tableSyncerId,
+		id:               id,
+		inputChan:        inputChan,
+		writer:           w,
+		ns:               ns,
+		collectionMetric: collectionMetric,
 	}
 }
 
@@ -135,5 +139,6 @@ func (ds *documentSyncer) write(input []interface{}) error {
 		return nil
 	}
 
+	defer atomic.AddUint64(&ds.collectionMetric.FinishCount, uint64(len(input)))
 	return ds.writer.WriteBulk(input)
 }
