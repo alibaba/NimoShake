@@ -251,7 +251,12 @@ func (fw *FileWriter) UpdateWithSet(shardId string, input map[string]interface{}
 					field.SetString(v)
 				case reflect.Invalid:
 					printData, _ := json.Marshal(data[i])
-					return fmt.Errorf("invalid field[%v], current checkpoint[%s]", key, printData)
+					return fmt.Errorf("invalid field[%v], current checkpoint[%s], input checkpoint[%v]",
+						key, printData, input)
+				default:
+					printData, _ := json.Marshal(data[i])
+					return fmt.Errorf("unknown type[%v] of field[%v], current checkpoint[%s], input checkpoint[%v]",
+						field.Kind(), key, printData, input)
 				}
 			}
 

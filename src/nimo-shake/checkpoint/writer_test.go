@@ -132,6 +132,7 @@ func TestCheckpointCRUD(t *testing.T) {
 			ShardId:  "test_id",
 			FatherId: "test_father",
 			Status:   StatusNotProcess,
+			SequenceNumber: "seq-123",
 		}
 
 		err = fileWriter.Update("test_id", cpkt, TestCheckpointTable)
@@ -152,9 +153,11 @@ func TestCheckpointCRUD(t *testing.T) {
 		assert.Equal(t, cpkt.ShardId, ckptRet.ShardId, "should be equal")
 		assert.Equal(t, cpkt.FatherId, ckptRet.FatherId, "should be equal")
 		assert.Equal(t, cpkt.Status, ckptRet.Status, "should be equal")
+		assert.Equal(t, cpkt.SequenceNumber, "seq-123", "should be equal")
 
 		err = fileWriter.UpdateWithSet("test_id", map[string]interface{}{
 			"Status": StatusInProcessing,
+			"SequenceNumber": "seq-456",
 		}, TestCheckpointTable)
 		assert.Equal(t, nil, err, "should be equal")
 
@@ -163,6 +166,7 @@ func TestCheckpointCRUD(t *testing.T) {
 		assert.Equal(t, cpkt.ShardId, ckptRet.ShardId, "should be equal")
 		assert.Equal(t, cpkt.FatherId, ckptRet.FatherId, "should be equal")
 		assert.Equal(t, StatusInProcessing, ckptRet.Status, "should be equal")
+		assert.Equal(t, "seq-456", ckptRet.SequenceNumber, "should be equal")
 	}
 }
 

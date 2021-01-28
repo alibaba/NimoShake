@@ -1,3 +1,0 @@
-{"ShardId":"id1","FatherId":"","SeqNum":"","Status":"not process","WorkerId":"","IteratorType":"","ShardIt":"","UpdateDate":""}
-{"ShardId":"id2","FatherId":"","SeqNum":"","Status":"in processing","WorkerId":"","IteratorType":"","ShardIt":"","UpdateDate":""}
-{"ShardId":"id3","FatherId":"","SeqNum":"","Status":"prepare stage","WorkerId":"","IteratorType":"","ShardIt":"","UpdateDate":""}

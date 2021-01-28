@@ -173,6 +173,12 @@ func sanitizeOptions() error {
 	if conf.Options.CheckpointType == "" {
 		conf.Options.CheckpointType = checkpoint.CheckpointWriterTypeFile
 	}
+	if conf.Options.CheckpointType == checkpoint.CheckpointWriterTypeMongo &&
+		conf.Options.CheckpointAddress == "" &&
+		conf.Options.TargetType != utils.TargetTypeMongo {
+		return fmt.Errorf("checkpoint.type should == file when checkpoint.address is empty and target.type != mongodb")
+	}
+
 	if conf.Options.CheckpointAddress == "" {
 		if conf.Options.TargetType == utils.TargetTypeMongo {
 			conf.Options.CheckpointAddress = conf.Options.TargetAddress

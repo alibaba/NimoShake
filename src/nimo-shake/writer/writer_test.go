@@ -16,7 +16,7 @@ import (
 
 const (
 	// TestMongoAddress = "mongodb://100.81.164.186:31883"
-	TestMongoAddress       = "mongodb://root:4053040Aa@s-uf652b3747d3f304-pub.mongodb.rds.aliyuncs.com:3717"
+	TestMongoAddress       = "mongodb://100.81.164.181:33010"
 	TestWriteDb            = "test_write_db"
 	TestWriteTable         = "test_write_table"
 	TestDynamoProxyAddress = "http://dds-uf6e2095cd850034.mongodb.rds.aliyuncs.com:3717"
