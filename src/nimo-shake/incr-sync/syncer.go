@@ -43,7 +43,7 @@ var (
 	GlobalFetcherLock     sync.Mutex
 
 	// move from const to var, used for UT
-	BatcherNumber = 128
+	BatcherNumber = 25
 	BatcherSize   = 2 * utils.MB
 
 	// incr sync metric
@@ -124,21 +124,22 @@ func Start(streamMap map[string]*dynamodbstreams.Stream, ckptWriter checkpoint.W
 /*-----------------------------------------------------------*/
 // 1 dispatcher corresponding to 1 shard
 type Dispatcher struct {
-	id                  int
-	shard               *utils.ShardNode
-	table               string
-	dynamoStreamSession *dynamodbstreams.DynamoDBStreams
-	targetWriter        writer.Writer
-	batchChan           chan *dynamodbstreams.Record
-	executorChan        chan *ExecuteNode
-	converter           protocal.Converter
-	ns                  utils.NS
-	checkpointPosition  string
-	shardIt             string // only used when checkpoint is empty
-	unitTestStr         string // used for UT only
-	close               bool   // is close?
-	ckptWriter          checkpoint.Writer
-	metric              *utils.ReplicationMetric
+	id                        int
+	shard                     *utils.ShardNode
+	table                     string
+	dynamoStreamSession       *dynamodbstreams.DynamoDBStreams
+	targetWriter              writer.Writer
+	batchChan                 chan *dynamodbstreams.Record
+	executorChan              chan *ExecuteNode
+	converter                 protocal.Converter
+	ns                        utils.NS
+	checkpointPosition        string
+	checkpointApproximateTime string
+	shardIt                   string // only used when checkpoint is empty
+	unitTestStr               string // used for UT only
+	close                     bool   // is close?
+	ckptWriter                checkpoint.Writer
+	metric                    *utils.ReplicationMetric
 }
 
 func NewDispatcher(id int, shard *utils.ShardNode, ckptWriter checkpoint.Writer, metric *utils.ReplicationMetric) *Dispatcher {
@@ -306,7 +307,7 @@ func (d *Dispatcher) Run() {
 }
 
 func (d *Dispatcher) getRecords(shardIt string) {
-	qos := qps.StartQoS(int(conf.Options.QpsFull))
+	qos := qps.StartQoS(int(conf.Options.QpsIncr))
 	defer qos.Close()
 
 	next := &shardIt
@@ -352,10 +353,11 @@ func (d *Dispatcher) getRecords(shardIt string) {
 }
 
 type ExecuteNode struct {
-	tp                 string
-	operate            []interface{}
-	index              []interface{}
-	lastSequenceNumber string
+	tp                          string
+	operate                     []interface{}
+	index                       []interface{}
+	lastSequenceNumber          string
+	approximateCreationDateTime string
 }
 
 func (d *Dispatcher) batcher() {
@@ -471,6 +473,9 @@ func (d *Dispatcher) batcher() {
 		}
 
 		node.lastSequenceNumber = *record.Dynamodb.SequenceNumber
+		if record.Dynamodb.ApproximateCreationDateTime != nil {
+			node.approximateCreationDateTime = record.Dynamodb.ApproximateCreationDateTime.String()
+		}
 		batchNr += 1
 		// batchSize += index.Size
 	}
@@ -481,7 +486,8 @@ func (d *Dispatcher) batcher() {
 
 func (d *Dispatcher) executor() {
 	for node := range d.executorChan {
-		LOG.Info("%s try write data with length[%v], tp[%v]", d.String(), len(node.index), node.tp)
+		LOG.Debug("%s try write data with length[%v], tp[%v] approximate[%v]", d.String(), len(node.index),
+			node.tp, node.approximateCreationDateTime)
 		var err error
 		switch node.tp {
 		case EventInsert:
@@ -501,6 +507,7 @@ func (d *Dispatcher) executor() {
 		d.metric.AddSuccess(uint64(len(node.index)))
 		d.metric.AddCheckpoint(1)
 		d.checkpointPosition = node.lastSequenceNumber
+		d.checkpointApproximateTime = node.approximateCreationDateTime
 	}
 
 	LOG.Info("%s executor exit", d.String())
@@ -525,9 +532,11 @@ func (d *Dispatcher) ckptManager() {
 			if d.shardIt != "" {
 				// update shardIt
 				ckpt = bson.M{
-					checkpoint.FieldShardIt:   d.shardIt,
-					checkpoint.FieldTimestamp: time.Now().Format(utils.GolangSecurityTime),
+					checkpoint.FieldShardIt:         d.shardIt,
+					checkpoint.FieldTimestamp:       time.Now().Format(utils.GolangSecurityTime),
+					checkpoint.FieldApproximateTime: d.checkpointApproximateTime,
 				}
+
 			} else {
 				continue
 			}
@@ -543,9 +552,10 @@ func (d *Dispatcher) ckptManager() {
 			}
 
 			ckpt = map[string]interface{}{
-				checkpoint.FieldSeqNum:       d.checkpointPosition,
-				checkpoint.FieldIteratorType: checkpoint.IteratorTypeAtSequence,
-				checkpoint.FieldTimestamp:    time.Now().Format(utils.GolangSecurityTime),
+				checkpoint.FieldSeqNum:          d.checkpointPosition,
+				checkpoint.FieldIteratorType:    checkpoint.IteratorTypeAtSequence,
+				checkpoint.FieldTimestamp:       time.Now().Format(utils.GolangSecurityTime),
+				checkpoint.FieldApproximateTime: d.checkpointApproximateTime,
 			}
 		}
 
@@ -571,8 +581,10 @@ func RestAPI() {
 	}
 
 	type CheckpointInfo struct {
-		UpdateTime    string `json:"update_time"`
-		FatherShardId string `json:"father_shard_id"`
+		UpdateTime      string `json:"update_time"`
+		ApproximateTime string `json:"sync_approximate_time"`
+		FatherShardId   string `json:"father_shard_id"`
+		SequenceNumber  string `json:sequence_number`
 	}
 
 	utils.IncrSyncHttpApi.RegisterAPI("/metric", nimo.HttpGet, func([]byte) interface{} {
@@ -592,8 +604,10 @@ func RestAPI() {
 				}
 
 				shardMap[shard] = &CheckpointInfo{
-					UpdateTime:    ckptVal.UpdateDate,
-					FatherShardId: ckptVal.FatherId,
+					UpdateTime:      ckptVal.UpdateDate,
+					FatherShardId:   ckptVal.FatherId,
+					ApproximateTime: ckptVal.ApproximateTime,
+					SequenceNumber:  ckptVal.SequenceNumber,
 				}
 			}
 			retCkptMap[table] = shardMap

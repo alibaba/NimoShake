@@ -3,6 +3,8 @@ package checkpoint
 import (
 	"nimo-shake/filter"
 	"sync"
+	"encoding/json"
+	"fmt"
 )
 
 const (
@@ -30,23 +32,30 @@ const (
 
 	StreamViewType = "NEW_AND_OLD_IMAGES"
 
-	FieldShardId      = "ShardId"
-	FieldShardIt      = "ShardIt"
-	FieldStatus       = "Status"
-	FieldSeqNum       = "SeqNum"
-	FieldIteratorType = "IteratorType"
-	FieldTimestamp    = "UpdateDate"
+	FieldShardId         = "ShardId"
+	FieldShardIt         = "ShardIt"
+	FieldStatus          = "Status"
+	FieldSeqNum          = "SequenceNumber"
+	FieldIteratorType    = "IteratorType"
+	FieldTimestamp       = "UpdateDate"
+	FieldApproximateTime = "ApproximateTime"
 )
 
 type Checkpoint struct {
-	ShardId        string `bson:"ShardId" json:"ShardId"`           // shard id
-	FatherId       string `bson:"FatherId" json:"FatherId"`         // father id
-	SequenceNumber string `bson:"SeqNum" json:"SeqNum"`             // checkpoint
-	Status         string `bson:"Status" json:"Status"`             // status
-	WorkerId       string `bson:"WorkerId" json:"WorkerId"`         // thread number
-	IteratorType   string `bson:"IteratorType" json:"IteratorType"` // "LATEST" or "AT_SEQUENCE_NUMBER"
-	ShardIt        string `bson:"ShardIt" json:"ShardIt"`           // only used when IteratorType == "LATEST"
-	UpdateDate     string `bson:"UpdateDate" json:"UpdateDate"`
+	ShardId         string `bson:"ShardId" json:"ShardId"`                 // shard id
+	FatherId        string `bson:"FatherId" json:"FatherId"`               // father id
+	SequenceNumber  string `bson:"SequenceNumber" json:"SequenceNumber"`   // checkpoint
+	Status          string `bson:"Status" json:"Status"`                   // status
+	WorkerId        string `bson:"WorkerId" json:"WorkerId"`               // thread number
+	IteratorType    string `bson:"IteratorType" json:"IteratorType"`       // "LATEST" or "AT_SEQUENCE_NUMBER"
+	ShardIt         string `bson:"ShardIt" json:"ShardIt"`                 // only used when IteratorType == "LATEST"
+	UpdateDate      string `bson:"UpdateDate" json:"UpdateDate"`           // update checkpoint time
+	ApproximateTime string `bson:"ApproximateTime" json:"ApproximateTime"` // approximate time of records
+}
+
+func (c *Checkpoint) String() string {
+	out, _ := json.Marshal(c)
+	return fmt.Sprintf("%s", out)
 }
 
 type Status struct {

@@ -51,7 +51,7 @@ func Welcome() {
 		`______________________________
 \                             \           _         ______ |
  \                             \        /   \___-=O'/|O'/__|
-  \  NimoShake, here we go !! \_______\          / | /    )
+  \  NimoShake, here we go !!   \_______\          / | /    )
   /                             /        '/-==__ _/__|/__=-|  -GM
  /        Alibaba Cloud        /         *             \ | |
 /            zhuzhao          /                        (o)

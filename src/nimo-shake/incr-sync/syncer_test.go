@@ -415,6 +415,7 @@ func TestBatcher_Executor(t *testing.T) {
 				Collection: "utTestCollection",
 			},
 			unitTestStr: "test",
+			metric: utils.NewMetric(utils.TypeIncr, utils.METRIC_CKPT_TIMES|utils.METRIC_SUCCESS|utils.METRIC_TPS),
 		}
 		d.targetWriter = writer.NewWriter(conf.Options.TargetType, conf.Options.TargetAddress, d.ns, conf.Options.LogLevel)
 		d.targetWriter.DropTable()
@@ -495,6 +496,7 @@ func TestBatcher_Executor(t *testing.T) {
 				Collection: "utTestCollection",
 			},
 			unitTestStr: "test",
+			metric: utils.NewMetric(utils.TypeIncr, utils.METRIC_CKPT_TIMES|utils.METRIC_SUCCESS|utils.METRIC_TPS),
 		}
 		d.targetWriter = writer.NewWriter(conf.Options.TargetType, conf.Options.TargetAddress, d.ns, conf.Options.LogLevel)
 		d.targetWriter.DropTable()
@@ -618,6 +620,7 @@ func TestBatcher_Executor(t *testing.T) {
 				Collection: "utTestCollection",
 			},
 			unitTestStr: "test",
+			metric: utils.NewMetric(utils.TypeIncr, utils.METRIC_CKPT_TIMES|utils.METRIC_SUCCESS|utils.METRIC_TPS),
 		}
 		d.targetWriter = writer.NewWriter(conf.Options.TargetType, conf.Options.TargetAddress, d.ns, conf.Options.LogLevel)
 		d.targetWriter.DropTable()
@@ -762,6 +765,7 @@ func TestBatcher_Executor(t *testing.T) {
 				Collection: "utTestCollection",
 			},
 			unitTestStr: "test",
+			metric: utils.NewMetric(utils.TypeIncr, utils.METRIC_CKPT_TIMES|utils.METRIC_SUCCESS|utils.METRIC_TPS),
 		}
 		d.targetWriter = writer.NewWriter(conf.Options.TargetType, conf.Options.TargetAddress, d.ns, conf.Options.LogLevel)
 
@@ -905,6 +909,7 @@ func TestBatcher_Executor(t *testing.T) {
 				Collection: "utTestCollection",
 			},
 			unitTestStr: "test",
+			metric: utils.NewMetric(utils.TypeIncr, utils.METRIC_CKPT_TIMES|utils.METRIC_SUCCESS|utils.METRIC_TPS),
 		}
 		d.targetWriter = writer.NewWriter(conf.Options.TargetType, conf.Options.TargetAddress, d.ns, conf.Options.LogLevel)
 
@@ -1056,6 +1061,7 @@ func TestBatcher_Executor(t *testing.T) {
 				Collection: "utTestCollection",
 			},
 			unitTestStr: "test",
+			metric: utils.NewMetric(utils.TypeIncr, utils.METRIC_CKPT_TIMES|utils.METRIC_SUCCESS|utils.METRIC_TPS),
 		}
 		d.targetWriter = writer.NewWriter(conf.Options.TargetType, conf.Options.TargetAddress, d.ns, conf.Options.LogLevel)
 
