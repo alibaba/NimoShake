@@ -6,15 +6,19 @@ import (
 	"nimo-shake/configure"
 	"nimo-shake/incr-sync"
 	"nimo-shake/checkpoint"
+	"nimo-shake/filter"
+	"nimo-shake/writer"
 
 	LOG "github.com/vinllen/log4go"
 	"github.com/aws/aws-sdk-go/service/dynamodbstreams"
-	"nimo-shake/filter"
-	"nimo-shake/writer"
+	"github.com/gugemichael/nimo4go"
 )
 
 func Start() {
 	LOG.Info("check connections")
+
+	utils.FullSyncInitHttpApi(conf.Options.FullSyncHTTPListenPort)
+	utils.IncrSyncInitHttpApi(conf.Options.IncrSyncHTTPListenPort)
 
 	// init filter
 	filter.Init(conf.Options.FilterCollectionWhite, conf.Options.FilterCollectionBlack)
@@ -26,7 +30,7 @@ func Start() {
 	}
 
 	// check writer connection
-	w := writer.NewWriter(conf.Options.TargetType, conf.Options.TargetAddress, utils.NS{"dynamo", "test"}, conf.Options.LogLevel)
+	w := writer.NewWriter(conf.Options.TargetType, conf.Options.TargetAddress, utils.NS{"nimo-shake", "shake_writer_test"}, conf.Options.LogLevel)
 	if w == nil {
 		LOG.Crashf("connect type[%v] address[%v] failed[%v]", conf.Options.TargetType, conf.Options.TargetAddress)
 	}
@@ -59,6 +63,18 @@ func Start() {
 
 	// full sync
 	if skipFull == false {
+		// register restful api
+		full_sync.RestAPI()
+
+		// start http server.
+		nimo.GoRoutine(func() {
+			// before starting, we must register all interface
+			if err := utils.FullSyncHttpApi.Listen(); err != nil {
+				LOG.Critical("start full sync server with port[%v] failed: %v", conf.Options.FullSyncHTTPListenPort,
+					err)
+			}
+		})
+
 		if conf.Options.SyncMode == utils.SyncModeAll {
 			LOG.Info("drop old checkpoint")
 			if err := ckptWriter.DropAll(); err != nil && err.Error() != utils.NotFountErr {
@@ -97,5 +113,16 @@ func Start() {
 	}
 	LOG.Info("start increase sync")
 
+	// register restful api
+	incr_sync.RestAPI()
+
+	// start http server.
+	nimo.GoRoutine(func() {
+		// before starting, we must register all interface
+		if err := utils.IncrSyncHttpApi.Listen(); err != nil {
+			LOG.Critical("start incr sync server with port[%v] failed: %v", conf.Options.IncrSyncHTTPListenPort,
+				err)
+		}
+	})
 	incr_sync.Start(streamMap, ckptWriter)
 }

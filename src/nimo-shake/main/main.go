@@ -58,6 +58,11 @@ func main() {
 		crash(fmt.Sprintf("Conf.Options check failed: %s", err.Error()), -4)
 	}
 
+	// read fcv and do comparison
+	if _, err := conf.CheckFcv(*configuration, utils.FcvConfiguration.FeatureCompatibleVersion); err != nil {
+		crash(err.Error(), -5)
+	}
+
 	utils.Welcome()
 	utils.StartTime = fmt.Sprintf("%v", time.Now().Format(utils.GolangSecurityTime))
 
@@ -72,6 +77,8 @@ func main() {
 	} else {
 		LOG.Info("%v configuration: %s", conf.Options.Id, string(opts))
 	}
+
+	nimo.Profiling(int(conf.Options.SystemProfile))
 
 	run.Start()
 
@@ -166,6 +173,12 @@ func sanitizeOptions() error {
 	if conf.Options.CheckpointType == "" {
 		conf.Options.CheckpointType = checkpoint.CheckpointWriterTypeFile
 	}
+	if conf.Options.CheckpointType == checkpoint.CheckpointWriterTypeMongo &&
+		conf.Options.CheckpointAddress == "" &&
+		conf.Options.TargetType != utils.TargetTypeMongo {
+		return fmt.Errorf("checkpoint.type should == file when checkpoint.address is empty and target.type != mongodb")
+	}
+
 	if conf.Options.CheckpointAddress == "" {
 		if conf.Options.TargetType == utils.TargetTypeMongo {
 			conf.Options.CheckpointAddress = conf.Options.TargetAddress

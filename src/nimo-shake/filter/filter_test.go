@@ -2,8 +2,9 @@ package filter
 
 import (
 	"testing"
-	"github.com/stretchr/testify/assert"
 	"fmt"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestFilter(t *testing.T) {
@@ -14,6 +15,10 @@ func TestFilter(t *testing.T) {
 		fmt.Printf("TestCheckpointCRUD case %d.\n", nr)
 		nr++
 
+		f = &Filter{
+			collectionWhiteMap: make(map[string]bool),
+			collectionBlackMap: make(map[string]bool),
+		}
 		Init("abc;efg;a", "")
 
 		assert.Equal(t, true, IsFilter("anc"), "should be equal")
@@ -26,6 +31,10 @@ func TestFilter(t *testing.T) {
 		fmt.Printf("TestCheckpointCRUD case %d.\n", nr)
 		nr++
 
+		f = &Filter{
+			collectionWhiteMap: make(map[string]bool),
+			collectionBlackMap: make(map[string]bool),
+		}
 		Init("","abc;efg;a")
 
 		assert.Equal(t, false, IsFilter("anc"), "should be equal")
@@ -38,6 +47,10 @@ func TestFilter(t *testing.T) {
 		fmt.Printf("TestCheckpointCRUD case %d.\n", nr)
 		nr++
 
+		f = &Filter{
+			collectionWhiteMap: make(map[string]bool),
+			collectionBlackMap: make(map[string]bool),
+		}
 		Init("","")
 
 		assert.Equal(t, false, IsFilter("anc"), "should be equal")

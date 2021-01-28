@@ -38,6 +38,7 @@ func Init(collectionWhite, collectBlack string) {
 }
 
 func IsFilter(collection string) bool {
+	// fmt.Println(f.collectionWhiteMap, collection, f.collectionWhiteMap[collection])
 	if len(f.collectionWhiteMap) != 0 {
 		return !f.collectionWhiteMap[collection]
 	} else if len(f.collectionBlackMap) != 0 {

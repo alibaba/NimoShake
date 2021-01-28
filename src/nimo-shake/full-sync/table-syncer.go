@@ -29,9 +29,10 @@ type tableSyncer struct {
 	fetcherChan         chan *dynamodb.ScanOutput // chan between fetcher and parser
 	parserChan          chan interface{}          // chan between parser and writer
 	converter           protocal.Converter        // converter
+	collectionMetric    *utils.CollectionMetric
 }
 
-func NewTableSyncer(id int, table string) *tableSyncer {
+func NewTableSyncer(id int, table string, collectionMetric *utils.CollectionMetric) *tableSyncer {
 	sourceConn, err := utils.CreateDynamoSession(conf.Options.LogLevel)
 	if err != nil {
 		LOG.Error("tableSyncer[%v] with table[%v] create dynamodb session error[%v]", id, table, err)
@@ -62,6 +63,7 @@ func NewTableSyncer(id int, table string) *tableSyncer {
 			Database:   conf.Options.Id,
 			Collection: table,
 		},
+		collectionMetric: collectionMetric,
 	}
 }
 
@@ -92,6 +94,12 @@ func (ts *tableSyncer) Sync() {
 		return
 	}
 
+	// total table item count
+	totalCount := ts.count()
+
+	ts.collectionMetric.CollectionStatus = utils.StatusProcessing
+	ts.collectionMetric.TotalCount = totalCount
+
 	// start fetcher to fetch all data from DynamoDB
 	go ts.fetcher()
 
@@ -112,7 +120,8 @@ func (ts *tableSyncer) Sync() {
 	for i := 0; i < int(conf.Options.FullDocumentConcurrency); i++ {
 		go func(id int) {
 			LOG.Info("%s create document syncer with id[%v]", ts, id)
-			ds := NewDocumentSyncer(ts.id, ts.ns.Collection, id, ts.parserChan)
+			ds := NewDocumentSyncer(ts.id, ts.ns.Collection, id, ts.parserChan, ts.sourceTableDescribe,
+				ts.collectionMetric)
 			ds.Run()
 			LOG.Info("%s document syncer with id[%v] exit", ts, id)
 			wgWriter.Done()
@@ -126,6 +135,7 @@ func (ts *tableSyncer) Sync() {
 	LOG.Info("%s all parsers exited, wait all writers exiting", ts.String())
 	wgWriter.Wait() // wait all writer exit
 
+	ts.collectionMetric.CollectionStatus = utils.StatusFinish
 	LOG.Info("%s finish syncing table", ts.String())
 }
 
@@ -192,4 +202,8 @@ func (ts *tableSyncer) parser(id int) {
 		}
 	}
 	LOG.Info("%s close parser", ts.String())
+}
+
+func (ts *tableSyncer) count() uint64 {
+	return uint64(*ts.sourceTableDescribe.ItemCount)
 }

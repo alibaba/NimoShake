@@ -10,12 +10,13 @@ import (
 	"nimo-shake/configure"
 	"nimo-shake/common"
 	"nimo-shake/checkpoint"
+	"nimo-shake/writer"
 
 	"github.com/aws/aws-sdk-go/service/dynamodbstreams"
 	LOG "github.com/vinllen/log4go"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/vinllen/mgo/bson"
-	"nimo-shake/writer"
+	"github.com/gugemichael/nimo4go"
 )
 
 const (
@@ -42,16 +43,27 @@ var (
 	GlobalFetcherLock     sync.Mutex
 
 	// move from const to var, used for UT
-	BatcherNumber = 1024
+	BatcherNumber = 25
 	BatcherSize   = 2 * utils.MB
+
+	// incr sync metric
+	replMetric  *utils.ReplicationMetric
+	ckptWriterG checkpoint.Writer
 )
 
+type IncrSycnMetric struct {
+	recordsGet   uint64
+	recordsWrite uint64
+}
+
 func Start(streamMap map[string]*dynamodbstreams.Stream, ckptWriter checkpoint.Writer) {
+	replMetric = utils.NewMetric(utils.TypeIncr, utils.METRIC_CKPT_TIMES|utils.METRIC_SUCCESS|utils.METRIC_TPS)
+	ckptWriterG = ckptWriter
 	for table, stream := range streamMap {
 		LOG.Info("table[%v] stream[%v] begin", table, *stream.StreamArn)
 
 		shardChan := make(chan *utils.ShardNode, ShardChanSize)
-		fetcher := NewFetcher(table, stream, shardChan, ckptWriter)
+		fetcher := NewFetcher(table, stream, shardChan, ckptWriter, replMetric)
 		if fetcher == nil {
 			LOG.Crashf("table[%v] stream[%v] start fetcher failed", table, *stream.StreamArn)
 		}
@@ -59,10 +71,10 @@ func Start(streamMap map[string]*dynamodbstreams.Stream, ckptWriter checkpoint.W
 		go fetcher.Run()
 
 		for i := 0; i < int(conf.Options.IncreaseConcurrency); i++ {
-			go func(id int) {
+			go func(id int, table string) {
 				for {
 					shard := <-shardChan
-					LOG.Info("dispatch id[%v] starts shard[%v]", id, *shard.Shard.ShardId)
+					LOG.Info("table[%s] dispatch id[%v] starts shard[%v]", table, id, *shard.Shard.ShardId)
 
 					// check whether current shard is running or finished
 					GlobalShardLock.Lock()
@@ -70,12 +82,15 @@ func Start(streamMap map[string]*dynamodbstreams.Stream, ckptWriter checkpoint.W
 					GlobalShardLock.Unlock()
 					switch flag {
 					case 0:
-						LOG.Info("dispatch id[%v] shard[%v] isn't running, need to run", id, *shard.Shard.ShardId)
+						LOG.Info("table[%s] dispatch id[%v] shard[%v] isn't running, need to run",
+							table, id, *shard.Shard.ShardId)
 					case 1:
-						LOG.Warn("dispatch id[%v] shard[%v] is running, no need to run again", id, *shard.Shard.ShardId)
+						LOG.Warn("table[%s] dispatch id[%v] shard[%v] is running, no need to run again",
+							table, id, *shard.Shard.ShardId)
 						continue
 					case 2:
-						LOG.Warn("dispatch id[%v] shard[%v] is finished, no need to run again", id, *shard.Shard.ShardId)
+						LOG.Warn("table[%s] dispatch id[%v] shard[%v] is finished, no need to run again",
+							table, id, *shard.Shard.ShardId)
 						continue
 					}
 
@@ -84,7 +99,7 @@ func Start(streamMap map[string]*dynamodbstreams.Stream, ckptWriter checkpoint.W
 					GlobalShardMap[*shard.Shard.ShardId] = 1
 					GlobalShardLock.Unlock()
 
-					d := NewDispatcher(id, shard, ckptWriter)
+					d := NewDispatcher(id, shard, ckptWriter, replMetric)
 					d.Run()
 
 					// set finished flag
@@ -99,7 +114,7 @@ func Start(streamMap map[string]*dynamodbstreams.Stream, ckptWriter checkpoint.W
 
 					LOG.Info("dispatch id[%v] finishes shard[%v]", id, *shard.Shard.ShardId)
 				}
-			}(i)
+			}(i, table)
 		}
 	}
 
@@ -109,26 +124,29 @@ func Start(streamMap map[string]*dynamodbstreams.Stream, ckptWriter checkpoint.W
 /*-----------------------------------------------------------*/
 // 1 dispatcher corresponding to 1 shard
 type Dispatcher struct {
-	id                  int
-	shard               *utils.ShardNode
-	dynamoStreamSession *dynamodbstreams.DynamoDBStreams
-	targetWriter        writer.Writer
-	batchChan           chan *dynamodbstreams.Record
-	executorChan        chan *ExecuteNode
-	converter           protocal.Converter
-	ns                  utils.NS
-	checkpointPosition  string
-	shardIt             string // only used when checkpoint is empty
-	unitTestStr         string // used for UT only
-	close               bool   // is close?
-	ckptWriter          checkpoint.Writer
+	id                        int
+	shard                     *utils.ShardNode
+	table                     string
+	dynamoStreamSession       *dynamodbstreams.DynamoDBStreams
+	targetWriter              writer.Writer
+	batchChan                 chan *dynamodbstreams.Record
+	executorChan              chan *ExecuteNode
+	converter                 protocal.Converter
+	ns                        utils.NS
+	checkpointPosition        string
+	checkpointApproximateTime string
+	shardIt                   string // only used when checkpoint is empty
+	unitTestStr               string // used for UT only
+	close                     bool   // is close?
+	ckptWriter                checkpoint.Writer
+	metric                    *utils.ReplicationMetric
 }
 
-func NewDispatcher(id int, shard *utils.ShardNode, ckptWriter checkpoint.Writer) *Dispatcher {
+func NewDispatcher(id int, shard *utils.ShardNode, ckptWriter checkpoint.Writer, metric *utils.ReplicationMetric) *Dispatcher {
 	// create dynamo stream client
 	dynamoStreamSession, err := utils.CreateDynamoStreamSession(conf.Options.LogLevel)
 	if err != nil {
-		LOG.Crashf("create dynamodb stream session failed[%v]", err)
+		LOG.Crashf("table[%s] create dynamodb stream session failed[%v]", shard.Table, err)
 		return nil
 	}
 
@@ -140,13 +158,14 @@ func NewDispatcher(id int, shard *utils.ShardNode, ckptWriter checkpoint.Writer)
 	// create target writer
 	targetWriter := writer.NewWriter(conf.Options.TargetType, conf.Options.TargetAddress, ns, conf.Options.LogLevel)
 	if targetWriter == nil {
-		LOG.Crashf("create target-writer with type[%v] and address[%v] failed", conf.Options.TargetType, conf.Options.TargetAddress)
+		LOG.Crashf("table[%s] create target-writer with type[%v] and address[%v] failed", ns.Collection,
+			conf.Options.TargetType, conf.Options.TargetAddress)
 	}
 
 	// converter
 	converter := protocal.NewConverter(conf.Options.ConvertType)
 	if converter == nil {
-		LOG.Crashf("create converter[%v] failed", conf.Options.ConvertType)
+		LOG.Crashf("table[%s] create converter[%v] failed", conf.Options.ConvertType)
 	}
 
 	d := &Dispatcher{
@@ -159,6 +178,7 @@ func NewDispatcher(id int, shard *utils.ShardNode, ckptWriter checkpoint.Writer)
 		converter:           converter,
 		ns:                  ns,
 		ckptWriter:          ckptWriter,
+		metric:              metric,
 	}
 
 	go d.batcher()
@@ -184,21 +204,24 @@ func (d *Dispatcher) Run() {
 
 	LOG.Info("%s begins, check father shard[%v] status", d.String(), father)
 
-	// check father finished
-	for {
-		fatherCkpt, err := d.ckptWriter.Query(father, d.ns.Collection)
-		if err != nil && err.Error() != utils.NotFountErr {
-			LOG.Crashf("%s query father[%v] checkpoint fail[%v]", d.String(), father, err)
-		}
+	if father != "" {
+		// check father finished
+		for {
+			fatherCkpt, err := d.ckptWriter.Query(father, d.ns.Collection)
+			if err != nil && err.Error() != utils.NotFountErr {
+				LOG.Crashf("%s query father[%v] checkpoint fail[%v]", d.String(), father, err)
+			}
 
-		// err != nil means utils.NotFountErr
-		if err != nil || !checkpoint.IsStatusProcessing(fatherCkpt.Status) {
-			break
-		}
+			// err != nil means utils.NotFountErr
+			if err != nil || !checkpoint.IsStatusProcessing(fatherCkpt.Status) {
+				break
+			}
 
-		LOG.Warn("%s father shard[%v] is still running, waiting...", d.String(), father)
-		time.Sleep(WaitFatherFinishInterval * time.Second)
+			LOG.Warn("%s father shard[%v] is still running, waiting...", d.String(), father)
+			time.Sleep(WaitFatherFinishInterval * time.Second)
+		}
 	}
+
 	LOG.Info("%s father shard[%v] finished", d.String(), father)
 
 	// fetch shardIt
@@ -222,20 +245,35 @@ func (d *Dispatcher) Run() {
 				 */
 				LOG.Crashf("%s shard[%v] iterator type[%v] abnormal, status[%v], need full sync", d.String(),
 					*d.shard.Shard.ShardId, ckpt.IteratorType, ckpt.Status)
+			} else if ckpt.ShardIt == checkpoint.InitShardIt {
+				// means generate new shardIt
+				shardItOut, err := d.dynamoStreamSession.GetShardIterator(&dynamodbstreams.GetShardIteratorInput{
+					ShardId:           d.shard.Shard.ShardId,
+					SequenceNumber:    aws.String(ckpt.SequenceNumber),
+					ShardIteratorType: aws.String(checkpoint.IteratorTypeAtSequence),
+					StreamArn:         aws.String(d.shard.ShardArn),
+				})
+				if err != nil {
+					LOG.Crashf("%s get shard iterator[SequenceNumber:%v, ShardIteratorType:%s, StreamArn:%s] "+
+						"failed[%v]", d.String(), ckpt.SequenceNumber, checkpoint.IteratorTypeAtSequence,
+						d.shard.ShardArn, err)
+				}
+				shardIt = *shardItOut.ShardIterator
 			} else {
 				// dynamodb rule: this is only used when restart in 30 minutes
 				shardIt = ckpt.ShardIt
 			}
 		} else {
 			shardItOut, err := d.dynamoStreamSession.GetShardIterator(&dynamodbstreams.GetShardIteratorInput{
-				ShardId: d.shard.Shard.ShardId,
-				// SequenceNumber:    d.shard.Shard.SequenceNumberRange.StartingSequenceNumber,
+				ShardId:           d.shard.Shard.ShardId,
 				SequenceNumber:    aws.String(ckpt.SequenceNumber),
-				ShardIteratorType: aws.String(checkpoint.IteratorTypeSequence),
+				ShardIteratorType: aws.String(checkpoint.IteratorTypeAfterSequence),
 				StreamArn:         aws.String(d.shard.ShardArn),
 			})
 			if err != nil {
-				LOG.Crashf("%s get shard iterator failed[%v]", d.String(), err)
+				LOG.Crashf("%s get shard iterator[SequenceNumber:%v, ShardIteratorType:%s, StreamArn:%s] "+
+					"failed[%v]", d.String(), ckpt.SequenceNumber, checkpoint.IteratorTypeAtSequence,
+					d.shard.ShardArn, err)
 			}
 			shardIt = *shardItOut.ShardIterator
 		}
@@ -269,7 +307,7 @@ func (d *Dispatcher) Run() {
 }
 
 func (d *Dispatcher) getRecords(shardIt string) {
-	qos := qps.StartQoS(int(conf.Options.QpsFull))
+	qos := qps.StartQoS(int(conf.Options.QpsIncr))
 	defer qos.Close()
 
 	next := &shardIt
@@ -296,6 +334,8 @@ func (d *Dispatcher) getRecords(shardIt string) {
 			continue
 		}
 
+		d.metric.AddGet(uint64(len(records.Records)))
+
 		// LOG.Info("bbbb2 ", records.Records)
 
 		// do write
@@ -313,10 +353,11 @@ func (d *Dispatcher) getRecords(shardIt string) {
 }
 
 type ExecuteNode struct {
-	tp                 string
-	operate            []interface{}
-	index              []interface{}
-	lastSequenceNumber string
+	tp                          string
+	operate                     []interface{}
+	index                       []interface{}
+	lastSequenceNumber          string
+	approximateCreationDateTime string
 }
 
 func (d *Dispatcher) batcher() {
@@ -337,6 +378,7 @@ func (d *Dispatcher) batcher() {
 		case record, ok = <-d.batchChan:
 		case <-time.After(time.Second * IncrBatcherTimeout):
 			timeout = true
+			record = nil
 		}
 
 		if !ok || timeout {
@@ -431,6 +473,9 @@ func (d *Dispatcher) batcher() {
 		}
 
 		node.lastSequenceNumber = *record.Dynamodb.SequenceNumber
+		if record.Dynamodb.ApproximateCreationDateTime != nil {
+			node.approximateCreationDateTime = record.Dynamodb.ApproximateCreationDateTime.String()
+		}
 		batchNr += 1
 		// batchSize += index.Size
 	}
@@ -441,7 +486,8 @@ func (d *Dispatcher) batcher() {
 
 func (d *Dispatcher) executor() {
 	for node := range d.executorChan {
-		LOG.Info("%s try write data with length[%v], tp[%v]", d.String(), len(node.index), node.tp)
+		LOG.Debug("%s try write data with length[%v], tp[%v] approximate[%v]", d.String(), len(node.index),
+			node.tp, node.approximateCreationDateTime)
 		var err error
 		switch node.tp {
 		case EventInsert:
@@ -457,7 +503,11 @@ func (d *Dispatcher) executor() {
 		if err != nil {
 			LOG.Crashf("execute command[%v] failed[%v]", node.tp, err)
 		}
+
+		d.metric.AddSuccess(uint64(len(node.index)))
+		d.metric.AddCheckpoint(1)
 		d.checkpointPosition = node.lastSequenceNumber
+		d.checkpointApproximateTime = node.approximateCreationDateTime
 	}
 
 	LOG.Info("%s executor exit", d.String())
@@ -482,9 +532,11 @@ func (d *Dispatcher) ckptManager() {
 			if d.shardIt != "" {
 				// update shardIt
 				ckpt = bson.M{
-					checkpoint.FieldShardIt:   d.shardIt,
-					checkpoint.FieldTimestamp: time.Now().Format(utils.GolangSecurityTime),
+					checkpoint.FieldShardIt:         d.shardIt,
+					checkpoint.FieldTimestamp:       time.Now().Format(utils.GolangSecurityTime),
+					checkpoint.FieldApproximateTime: d.checkpointApproximateTime,
 				}
+
 			} else {
 				continue
 			}
@@ -500,9 +552,10 @@ func (d *Dispatcher) ckptManager() {
 			}
 
 			ckpt = map[string]interface{}{
-				checkpoint.FieldSeqNum:       d.checkpointPosition,
-				checkpoint.FieldIteratorType: checkpoint.IteratorTypeSequence,
-				checkpoint.FieldTimestamp:    time.Now().Format(utils.GolangSecurityTime),
+				checkpoint.FieldSeqNum:          d.checkpointPosition,
+				checkpoint.FieldIteratorType:    checkpoint.IteratorTypeAtSequence,
+				checkpoint.FieldTimestamp:       time.Now().Format(utils.GolangSecurityTime),
+				checkpoint.FieldApproximateTime: d.checkpointApproximateTime,
 			}
 		}
 
@@ -516,4 +569,56 @@ func (d *Dispatcher) ckptManager() {
 				*d.shard.Shard.ShardId, ckpt)
 		}
 	}
+}
+
+func RestAPI() {
+	type IncrSyncInfo struct {
+		Get         uint64      `json:"records_get"`
+		Write       uint64      `json:"records_write"`
+		CkptTimes   uint64      `json:"checkpoint_times"`
+		UpdateTimes interface{} `json:"checkpoint_update_times"`
+		Error       string      `json:"error"`
+	}
+
+	type CheckpointInfo struct {
+		UpdateTime      string `json:"update_time"`
+		ApproximateTime string `json:"sync_approximate_time"`
+		FatherShardId   string `json:"father_shard_id"`
+		SequenceNumber  string `json:sequence_number`
+	}
+
+	utils.IncrSyncHttpApi.RegisterAPI("/metric", nimo.HttpGet, func([]byte) interface{} {
+		ckpt, err := ckptWriterG.ExtractCheckpoint()
+		if err != nil {
+			return &IncrSyncInfo{
+				Error: err.Error(),
+			}
+		}
+
+		retCkptMap := make(map[string]map[string]interface{}, len(ckpt))
+		for table, ckptShardMap := range ckpt {
+			shardMap := make(map[string]interface{}, 1)
+			for shard, ckptVal := range ckptShardMap {
+				if ckptVal.Status != string(utils.StatusProcessing) {
+					continue
+				}
+
+				shardMap[shard] = &CheckpointInfo{
+					UpdateTime:      ckptVal.UpdateDate,
+					FatherShardId:   ckptVal.FatherId,
+					ApproximateTime: ckptVal.ApproximateTime,
+					SequenceNumber:  ckptVal.SequenceNumber,
+				}
+			}
+			retCkptMap[table] = shardMap
+		}
+
+		return &IncrSyncInfo{
+			Get:         replMetric.Get(),
+			Write:       replMetric.Success(),
+			CkptTimes:   replMetric.CheckpointTimes,
+			UpdateTimes: retCkptMap,
+		}
+	})
+
 }

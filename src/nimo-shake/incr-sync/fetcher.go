@@ -22,9 +22,10 @@ type Fetcher struct {
 	stream       *dynamodbstreams.Stream
 	shardChan    chan *utils.ShardNode
 	ckptWriter   checkpoint.Writer
+	metric *utils.ReplicationMetric
 }
 
-func NewFetcher(table string, stream *dynamodbstreams.Stream, shardChan chan *utils.ShardNode, ckptWriter checkpoint.Writer) *Fetcher {
+func NewFetcher(table string, stream *dynamodbstreams.Stream, shardChan chan *utils.ShardNode, ckptWriter checkpoint.Writer, metric *utils.ReplicationMetric) *Fetcher {
 	// create dynamo stream client
 	dynamoStreamSession, err := utils.CreateDynamoStreamSession(conf.Options.LogLevel)
 	if err != nil {
@@ -38,6 +39,7 @@ func NewFetcher(table string, stream *dynamodbstreams.Stream, shardChan chan *ut
 		stream:       stream,
 		shardChan:    shardChan,
 		ckptWriter:   ckptWriter,
+		metric: metric,
 	}
 }
 
@@ -112,7 +114,7 @@ func (f *Fetcher) Run() {
 					Status:         checkpoint.StatusPrepareProcess,
 					WorkerId:       "unknown",
 					FatherId:       father,
-					IteratorType:   checkpoint.IteratorTypeSequence,
+					IteratorType:   checkpoint.IteratorTypeAtSequence,
 					UpdateDate:     "", // empty at first
 				}
 				f.ckptWriter.Insert(newCkpt, f.table)
@@ -138,7 +140,7 @@ func (f *Fetcher) Run() {
 				LOG.Info("status need to process: %v", *ckpt)
 				ckpt.SequenceNumber = *node.Shard.SequenceNumberRange.StartingSequenceNumber
 				ckpt.Status = checkpoint.StatusPrepareProcess
-				ckpt.IteratorType = checkpoint.IteratorTypeSequence
+				ckpt.IteratorType = checkpoint.IteratorTypeAtSequence
 				f.ckptWriter.Update(ckpt.ShardId, ckpt, f.table)
 				shardList = append(shardList, node)
 				return utils.StopTraverseSonErr

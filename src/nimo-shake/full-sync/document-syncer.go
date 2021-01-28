@@ -4,13 +4,14 @@ import (
 	"time"
 	"fmt"
 
-	"nimo-shake/protocal"
 	"nimo-shake/common"
 	"nimo-shake/configure"
 	"nimo-shake/writer"
 
 	LOG "github.com/vinllen/log4go"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
+	"nimo-shake/protocal"
+	"sync/atomic"
 )
 
 const (
@@ -19,17 +20,24 @@ const (
 	batchTimeout = 1            // seconds
 )
 
+var (
+	UT_TestDocumentSyncer      = false
+	UT_TestDocumentSyncer_Chan chan []interface{}
+)
+
 /*------------------------------------------------------*/
 // one document link corresponding to one documentSyncer
 type documentSyncer struct {
-	tableSyncerId int
-	id            int // documentSyncer id
-	ns            utils.NS
-	inputChan     chan interface{} // parserChan in table-syncer
-	writer        writer.Writer
+	tableSyncerId    int
+	id               int // documentSyncer id
+	ns               utils.NS
+	inputChan        chan interface{} // parserChan in table-syncer
+	writer           writer.Writer
+	collectionMetric *utils.CollectionMetric
 }
 
-func NewDocumentSyncer(tableSyncerId int, table string, id int, inputChan chan interface{}) *documentSyncer {
+func NewDocumentSyncer(tableSyncerId int, table string, id int, inputChan chan interface{},
+	tableDescribe *dynamodb.TableDescription, collectionMetric *utils.CollectionMetric) *documentSyncer {
 	ns := utils.NS{
 		Database:   conf.Options.Id,
 		Collection: table,
@@ -40,12 +48,15 @@ func NewDocumentSyncer(tableSyncerId int, table string, id int, inputChan chan i
 		LOG.Crashf("tableSyncer[%v] documentSyncer[%v] create writer failed", tableSyncerId, table)
 	}
 
+	w.PassTableDesc(tableDescribe)
+
 	return &documentSyncer{
-		tableSyncerId: tableSyncerId,
-		id:            id,
-		inputChan:     inputChan,
-		writer:        w,
-		ns:            ns,
+		tableSyncerId:    tableSyncerId,
+		id:               id,
+		inputChan:        inputChan,
+		writer:           w,
+		ns:               ns,
+		collectionMetric: collectionMetric,
 	}
 }
 
@@ -74,20 +85,27 @@ func (ds *documentSyncer) Run() {
 		case <-time.After(time.Second * batchTimeout):
 			// timeout
 			timeout = true
+			data = nil
 		}
 
 		LOG.Debug("exit[%v], timeout[%v], len(batchGroup)[%v], batchGroupSize[%v], data[%v]", exit, timeout,
 			len(batchGroup), batchGroupSize, data)
 
-		switch v := data.(type) {
-		case protocal.RawData:
-			if v.Size > 0 {
-				batchGroup = append(batchGroup, v.Data)
-				batchGroupSize += v.Size
+		if data != nil {
+			if UT_TestDocumentSyncer {
+				batchGroup = append(batchGroup, data)
+			} else {
+				switch v := data.(type) {
+				case protocal.RawData:
+					if v.Size > 0 {
+						batchGroup = append(batchGroup, v.Data)
+						batchGroupSize += v.Size
+					}
+				case map[string]*dynamodb.AttributeValue:
+					batchGroup = append(batchGroup, v)
+					// meaningless batchGroupSize
+				}
 			}
-		case map[string]*dynamodb.AttributeValue:
-			batchGroup = append(batchGroup, v)
-			// meaningless batchGroupSize
 		}
 
 		if exit || timeout || len(batchGroup) >= batchNumber || batchGroupSize >= batchSize {
@@ -116,5 +134,11 @@ func (ds *documentSyncer) write(input []interface{}) error {
 		return nil
 	}
 
+	if UT_TestDocumentSyncer {
+		UT_TestDocumentSyncer_Chan <- input
+		return nil
+	}
+
+	defer atomic.AddUint64(&ds.collectionMetric.FinishCount, uint64(len(input)))
 	return ds.writer.WriteBulk(input)
 }

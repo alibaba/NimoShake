@@ -32,6 +32,7 @@ func CheckCkpt(ckptWriter Writer, dynamoStreams *dynamodbstreams.DynamoDBStreams
 		LOG.Error("extract checkpoint failed[%v]", err)
 		return false, nil, err
 	}
+	LOG.Info("checkpoint map: %v", ckptMap)
 
 	// fetch source stream shard information
 	/*
@@ -206,7 +207,7 @@ func PrepareFullSyncCkpt(ckptManager Writer, dynamoSession *dynamodb.DynamoDB,
 	// re-create a new map to mark whether current table exists on the target checkpoint table
 	sourceCkptTableMap := utils.StringListToMap(sourceTableList)
 
-	LOG.Info("traverse all streams")
+	LOG.Info("traverse all streams: %v", sourceCkptTableMap)
 	streamMap := make(map[string]*dynamodbstreams.Stream)
 	// traverse streams
 	for {
@@ -246,7 +247,7 @@ func PrepareFullSyncCkpt(ckptManager Writer, dynamoSession *dynamodb.DynamoDB,
 			streamMap[*stream.TableName] = stream
 
 			// traverse shard
-			LOG.Info("table[%v] isn't has checkpoint, try to insert", *stream.TableName)
+			LOG.Info("table[%v] doesn't have checkpoint, try to insert", *stream.TableName)
 			rootNode := utils.BuildShardTree(describeStreamResult.StreamDescription.Shards, *stream.TableName,
 				*stream.StreamArn)
 
@@ -267,7 +268,7 @@ func PrepareFullSyncCkpt(ckptManager Writer, dynamoSession *dynamodb.DynamoDB,
 					SequenceNumber: "",
 					Status:         StatusNotProcess,
 					WorkerId:       "unknown-worker",
-					IteratorType:   IteratorTypeSequence,
+					IteratorType:   IteratorTypeAtSequence,
 				}
 
 				if node.Shard.SequenceNumberRange.EndingSequenceNumber != nil {
@@ -286,10 +287,23 @@ func PrepareFullSyncCkpt(ckptManager Writer, dynamoSession *dynamodb.DynamoDB,
 					if err != nil {
 						return fmt.Errorf("construct shard[%v] iterator failed[%v]", node.Shard.ShardId, err)
 					}
-					ckpt.ShardIt = *outShardIt.ShardIterator
+					// ckpt.ShardIt = *outShardIt.ShardIterator
+					ckpt.ShardIt = InitShardIt
 
+					// fetch sequence number based on first record
+					if seq, approximate, err := fetchSeqNumber(outShardIt.ShardIterator, dynamoStreams, node.Table); err != nil {
+						return fmt.Errorf("fetch shard[%v] sequence number failed[%v]", node.Shard.ShardId, err)
+					} else if seq != "" {
+						ckpt.SequenceNumber = seq
+						ckpt.ApproximateTime = approximate
+					} else {
+						// set the shard start sequence number as sequence number if no data return
+						ckpt.SequenceNumber = *node.Shard.SequenceNumberRange.StartingSequenceNumber
+					}
+
+					// v1.0.4: do not set
 					// set shard iterator map which will be used in incr-sync
-					GlobalShardIteratorMap.Set(*node.Shard.ShardId, *outShardIt.ShardIterator)
+					// GlobalShardIteratorMap.Set(*node.Shard.ShardId, *outShardIt.ShardIterator)
 
 					LOG.Info("insert table[%v] checkpoint[%v]", *stream.TableName, *ckpt)
 					if err = ckptManager.Insert(ckpt, *stream.TableName); err != nil {
@@ -315,4 +329,31 @@ func PrepareFullSyncCkpt(ckptManager Writer, dynamoSession *dynamodb.DynamoDB,
 	}
 
 	return streamMap, nil
+}
+
+// fetch first sequence number based on given shardIt
+func fetchSeqNumber(shardIt *string, dynamoStreams *dynamodbstreams.DynamoDBStreams, table string) (string, string, error) {
+	LOG.Info("fetch sequence number of shard[%v] table[%v]", *shardIt, table)
+	// retry 5 times
+	for i := 0; i < 5; i++ {
+		records, err := dynamoStreams.GetRecords(&dynamodbstreams.GetRecordsInput{
+			ShardIterator: shardIt,
+			Limit:         aws.Int64(1),
+		})
+		if err != nil {
+			return "", "", err
+		}
+
+		if len(records.Records) > 0 {
+			return *records.Records[0].Dynamodb.SequenceNumber,
+				records.Records[0].Dynamodb.ApproximateCreationDateTime.String(), nil
+		}
+		time.Sleep(5 * time.Second)
+
+		shardIt = records.NextShardIterator
+	}
+	LOG.Info("fetch sequence number of shard[%v] table[%v]: not found, return empty", *shardIt, table)
+
+	// what if no data? return empty
+	return "", "", nil
 }
