@@ -6,7 +6,7 @@ var (
 		FeatureCompatibleVersion: 0,
 	}
 	FcvConfiguration = Configuration{
-		CurrentVersion:           1,
+		CurrentVersion:           2,
 		FeatureCompatibleVersion: 1,
 	}
 
@@ -16,6 +16,7 @@ var (
 	LowestConfigurationVersion = map[int]string{
 		0: "1.0.0",
 		1: "1.0.6", // add full sync and incr sync http port
+		2: "1.0.8", // add full.read.concurrency
 	}
 )
 

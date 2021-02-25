@@ -27,11 +27,14 @@ const (
 
 	TargetDBExistRename = "rename"
 	TargetDBExistDrop   = "drop"
+
+	SIGNALPROFILE = 31
+	SIGNALSTACK   = 30
 )
 
 var (
-	Version   = "$"
-	StartTime string
+	Version       = "$"
+	StartTime     string
 )
 
 func InitialLogger(logFile string, level string, logBuffer bool) bool {

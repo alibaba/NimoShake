@@ -6,14 +6,16 @@ import (
 	"time"
 	"encoding/json"
 	"flag"
+	"syscall"
+	_ "net/http/pprof"
 
 	"nimo-shake/configure"
 	"nimo-shake/common"
 	"nimo-shake/run"
+	"nimo-shake/checkpoint"
 
 	LOG "github.com/vinllen/log4go"
 	"github.com/gugemichael/nimo4go"
-	"nimo-shake/checkpoint"
 )
 
 type Exit struct{ Code int }
@@ -79,6 +81,10 @@ func main() {
 	}
 
 	nimo.Profiling(int(conf.Options.SystemProfile))
+	nimo.RegisterSignalForProfiling(syscall.Signal(utils.SIGNALPROFILE)) // syscall.SIGUSR2
+	nimo.RegisterSignalForPrintStack(syscall.Signal(utils.SIGNALSTACK), func(bytes []byte) { // syscall.SIGUSR1
+		LOG.Info(string(bytes))
+	})
 
 	run.Start()
 
@@ -131,6 +137,12 @@ func sanitizeOptions() error {
 
 	if conf.Options.FullDocumentConcurrency > 4096 || conf.Options.FullDocumentConcurrency == 0 {
 		return fmt.Errorf("full.document.concurrency[%v] should in (0, 4096]", conf.Options.FullDocumentConcurrency)
+	}
+
+	if conf.Options.FullReadConcurrency <= 0 {
+		conf.Options.FullReadConcurrency = 1
+	} else if conf.Options.FullReadConcurrency > 8192 {
+		return fmt.Errorf("full.read.concurrency[%v] should in (0, 8192]", conf.Options.FullReadConcurrency)
 	}
 
 	if conf.Options.FullDocumentParser > 4096 || conf.Options.FullDocumentParser == 0 {
