@@ -144,37 +144,50 @@ func (ts *tableSyncer) Close() {
 }
 
 func (ts *tableSyncer) fetcher() {
-	LOG.Info("%s start fetcher", ts.String())
+	LOG.Info("%s start fetcher with %v reader", ts.String(), conf.Options.FullReadConcurrency)
 
 	qos := qps.StartQoS(int(conf.Options.QpsFull))
 	defer qos.Close()
 
-	// init nil
-	var previousKey map[string]*dynamodb.AttributeValue
-	for {
-		<-qos.Bucket
+	var wg sync.WaitGroup
+	wg.Add(int(conf.Options.FullReadConcurrency))
+	for i := 0; i < int(conf.Options.FullReadConcurrency); i++ {
+		go func(segmentId int64) {
+			LOG.Info("%s start reader[%v]", ts.String(), segmentId)
+			defer LOG.Info("%s stop reader[%v]", ts.String(), segmentId)
 
-		out, err := ts.sourceConn.Scan(&dynamodb.ScanInput{
-			TableName:         aws.String(ts.ns.Collection),
-			ExclusiveStartKey: previousKey,
-			Limit:             aws.Int64(conf.Options.QpsFullBatchNum),
-		})
-		if err != nil {
-			// TODO check network error and retry
-			LOG.Crashf("%s fetcher scan failed[%v]", ts.String(), err)
-		}
+			// init nil
+			var previousKey map[string]*dynamodb.AttributeValue
+			for {
+				<-qos.Bucket
 
-		// LOG.Info(*out.Count)
+				out, err := ts.sourceConn.Scan(&dynamodb.ScanInput{
+					TableName:         aws.String(ts.ns.Collection),
+					TotalSegments:     aws.Int64(int64(conf.Options.FullReadConcurrency)),
+					Segment:           aws.Int64(segmentId),
+					ExclusiveStartKey: previousKey,
+					Limit:             aws.Int64(conf.Options.QpsFullBatchNum),
+				})
+				if err != nil {
+					// TODO check network error and retry
+					LOG.Crashf("%s fetcher scan failed[%v]", ts.String(), err)
+				}
 
-		// pass result to parser
-		ts.fetcherChan <- out
+				// LOG.Info(*out.Count)
 
-		previousKey = out.LastEvaluatedKey
-		if previousKey == nil {
-			// complete
-			break
-		}
+				// pass result to parser
+				ts.fetcherChan <- out
+
+				previousKey = out.LastEvaluatedKey
+				if previousKey == nil {
+					// complete
+					break
+				}
+			}
+			wg.Done()
+		}(int64(i))
 	}
+	wg.Wait()
 
 	LOG.Info("%s close fetcher", ts.String())
 	close(ts.fetcherChan)

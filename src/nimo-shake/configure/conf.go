@@ -29,6 +29,7 @@ type Configuration struct {
 	TargetDBExist                     string `config:"target.db.exist"`
 	SyncSchemaOnly                    bool   `config:"sync_schema_only"`
 	FullConcurrency                   uint   `config:"full.concurrency"`
+	FullReadConcurrency               uint   `config:"full.read.concurrency"`
 	FullDocumentConcurrency           uint   `config:"full.document.concurrency"`
 	FullDocumentParser                uint   `config:"full.document.parser"`
 	FullEnableIndexPrimary            bool   `config:"full.enable_index.primary"`
