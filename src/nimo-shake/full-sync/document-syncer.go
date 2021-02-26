@@ -15,7 +15,6 @@ import (
 )
 
 const (
-	batchNumber  = 25           // dynamo-proxy limit
 	batchSize    = 2 * utils.MB // mongodb limit: 16MB
 	batchTimeout = 1            // seconds
 )
@@ -69,6 +68,9 @@ func (ds *documentSyncer) Close() {
 }
 
 func (ds *documentSyncer) Run() {
+	batchNumber := int(conf.Options.FullDocumentWriteBatch)
+	LOG.Info("%s start with batchSize[%v]", ds.String(), batchNumber)
+
 	var data interface{}
 	var ok bool
 	batchGroup := make([]interface{}, 0, batchNumber)

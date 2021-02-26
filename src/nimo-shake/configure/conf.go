@@ -31,6 +31,7 @@ type Configuration struct {
 	FullConcurrency                   uint   `config:"full.concurrency"`
 	FullReadConcurrency               uint   `config:"full.read.concurrency"`
 	FullDocumentConcurrency           uint   `config:"full.document.concurrency"`
+	FullDocumentWriteBatch            uint   `config:"full.document.write.batch"`
 	FullDocumentParser                uint   `config:"full.document.parser"`
 	FullEnableIndexPrimary            bool   `config:"full.enable_index.primary"`
 	FullEnableIndexUser               bool   `config:"full.enable_index.user"`

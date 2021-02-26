@@ -105,7 +105,10 @@ func (mw *MongoWriter) WriteBulk(input []interface{}) error {
 		return nil
 	}
 
-	if err := mw.conn.Session.DB(mw.ns.Database).C(mw.ns.Collection).Insert(input...); err != nil {
+	bulk := mw.conn.Session.DB(mw.ns.Database).C(mw.ns.Collection).Bulk()
+	bulk.Unordered()
+	bulk.Insert(input...)
+	if _, err := bulk.Run(); err != nil {
 		if mgo.IsDup(err) {
 			LOG.Warn("%s duplicated document found[%v]. reinsert or update", err, mw)
 			if !conf.Options.FullExecutorInsertOnDupUpdate || len(mw.primaryIndexes) == 0 {
