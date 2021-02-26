@@ -1,3 +1,10 @@
+2021-02-26
+	* VERSION: 1.0.9
+	* IMPROVE: add full.document.write.batch.
+	* IMPROVE: enable MongoDB unordered bulk write.
+	* IMPROVE: create range index instead of hash index when target mongodb
+	type is replcaSet.
+
 2021-02-25
 	* VERSION: 1.0.8
 	* IMPROVE: add pprof.

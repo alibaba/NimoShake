@@ -278,6 +278,7 @@ func (mw *MongoWriter) createPrimaryIndex(primaryIndexes []*dynamodb.KeySchemaEl
 func (mw *MongoWriter) createUserIndex(globalSecondaryIndexes []*dynamodb.GlobalSecondaryIndexDescription, parseMap map[string]string) error {
 	for _, gsi := range globalSecondaryIndexes {
 		primaryIndexes := gsi.KeySchema
+		// duplicate index will be ignored by MongoDB
 		if _, err := mw.createSingleIndex(primaryIndexes, parseMap, false); err != nil {
 			LOG.Error("ns[%s] create users' single index failed[%v]", mw.ns, err)
 			return err
@@ -315,14 +316,20 @@ func (mw *MongoWriter) createSingleIndex(primaryIndexes []*dynamodb.KeySchemaEle
 		}
 	}
 
+	var indexType interface{}
+	indexType = "hashed"
+	if conf.Options.TargetMongoDBType == utils.TargetMongoDBTypeReplica {
+		indexType = 1
+	}
+
 	doc := bson.D{
 		{Name: "createIndexes", Value: mw.ns.Collection},
 		{Name: "indexes", Value: []bson.M{
 			{
 				"key": bson.M{
-					primaryKeyWithType: "hashed",
+					primaryKeyWithType: indexType,
 				},
-				"name":       fmt.Sprintf("%s_%s", primaryKeyWithType, "hashed"),
+				"name":       fmt.Sprintf("%s_%v", primaryKeyWithType, indexType),
 				"background": true,
 			},
 		}},
@@ -330,7 +337,7 @@ func (mw *MongoWriter) createSingleIndex(primaryIndexes []*dynamodb.KeySchemaEle
 	LOG.Info("create index isPrimary[%v]: %v", isPrimaryKey, doc)
 	// create hash key only
 	if err := mw.conn.Session.DB(mw.ns.Database).Run(doc, nil); err != nil {
-		return "", fmt.Errorf("create primary[%v] hash index failed[%v]", isPrimaryKey, err)
+		return "", fmt.Errorf("create primary[%v] %v index failed[%v]", isPrimaryKey, indexType, err)
 	}
 
 	return primaryKeyWithType, nil
