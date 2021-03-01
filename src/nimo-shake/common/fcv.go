@@ -6,7 +6,7 @@ var (
 		FeatureCompatibleVersion: 0,
 	}
 	FcvConfiguration = Configuration{
-		CurrentVersion:           2,
+		CurrentVersion:           3,
 		FeatureCompatibleVersion: 1,
 	}
 
@@ -17,6 +17,7 @@ var (
 		0: "1.0.0",
 		1: "1.0.6", // add full sync and incr sync http port
 		2: "1.0.8", // add full.read.concurrency
+		3: "1.0.9", // add full.document.write.batch
 	}
 )
 

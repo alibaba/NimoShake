@@ -139,6 +139,16 @@ func sanitizeOptions() error {
 		return fmt.Errorf("full.document.concurrency[%v] should in (0, 4096]", conf.Options.FullDocumentConcurrency)
 	}
 
+	if conf.Options.FullDocumentWriteBatch <= 0 {
+		if conf.Options.TargetType == utils.TargetTypeAliyunDynamoProxy {
+			conf.Options.FullDocumentWriteBatch = 25
+		} else {
+			conf.Options.FullDocumentWriteBatch = 128
+		}
+	} else if conf.Options.FullDocumentWriteBatch > 25 && conf.Options.TargetType == utils.TargetTypeAliyunDynamoProxy {
+		conf.Options.FullDocumentWriteBatch = 25
+	}
+
 	if conf.Options.FullReadConcurrency <= 0 {
 		conf.Options.FullReadConcurrency = 1
 	} else if conf.Options.FullReadConcurrency > 8192 {

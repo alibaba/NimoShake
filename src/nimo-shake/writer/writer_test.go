@@ -12,14 +12,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/vinllen/mgo"
 	"github.com/vinllen/mgo/bson"
+	"nimo-shake/unit_test_common"
 )
 
 const (
-	// TestMongoAddress = "mongodb://100.81.164.186:31883"
-	TestMongoAddress       = "mongodb://100.81.164.181:33010"
-	TestWriteDb            = "test_write_db"
-	TestWriteTable         = "test_write_table"
-	TestDynamoProxyAddress = "http://dds-uf6e2095cd850034.mongodb.rds.aliyuncs.com:3717"
+	TestMongoAddressReplica  = unit_test_common.TestUrl
+	TestMongoAddressSharding = unit_test_common.TestUrlSharding
+	TestWriteDb              = "test_write_db"
+	TestWriteTable           = "test_write_table"
+	TestDynamoProxyAddress   = "http://dds-uf6e2095cd850034.mongodb.rds.aliyuncs.com:3717"
 )
 
 func TestMongo(t *testing.T) {
@@ -38,11 +39,11 @@ func TestMongo(t *testing.T) {
 		conf.Options.ConvertType = utils.ConvertTypeChange
 
 		ns := utils.NS{Database: TestWriteDb, Collection: TestWriteTable}
-		mongoWriter := NewWriter(utils.TargetTypeMongo, TestMongoAddress, ns, "info")
+		mongoWriter := NewWriter(utils.TargetTypeMongo, TestMongoAddressSharding, ns, "info")
 		assert.Equal(t, true, mongoWriter != nil, "should be equal")
 
 		// test connection
-		mongoTestConn, err := utils.NewMongoConn(TestMongoAddress, utils.ConnectModePrimary, true)
+		mongoTestConn, err := utils.NewMongoConn(TestMongoAddressSharding, utils.ConnectModePrimary, true)
 		assert.Equal(t, nil, err, "should be equal")
 		defer mongoTestConn.Close()
 
@@ -171,11 +172,11 @@ func TestMongo(t *testing.T) {
 		conf.Options.IncreaseExecutorInsertOnDupUpdate = true
 
 		ns := utils.NS{Database: TestWriteDb, Collection: TestWriteTable}
-		mongoWriter := NewWriter(utils.TargetTypeMongo, TestMongoAddress, ns, "info")
+		mongoWriter := NewWriter(utils.TargetTypeMongo, TestMongoAddressSharding, ns, "info")
 		assert.Equal(t, true, mongoWriter != nil, "should be equal")
 
 		// test connection
-		mongoTestConn, err := utils.NewMongoConn(TestMongoAddress, utils.ConnectModePrimary, true)
+		mongoTestConn, err := utils.NewMongoConn(TestMongoAddressSharding, utils.ConnectModePrimary, true)
 		assert.Equal(t, nil, err, "should be equal")
 		defer mongoTestConn.Close()
 
@@ -385,11 +386,11 @@ func TestMongo(t *testing.T) {
 		conf.Options.IncreaseExecutorInsertOnDupUpdate = true
 
 		ns := utils.NS{Database: TestWriteDb, Collection: TestWriteTable}
-		mongoWriter := NewWriter(utils.TargetTypeMongo, TestMongoAddress, ns, "info")
+		mongoWriter := NewWriter(utils.TargetTypeMongo, TestMongoAddressSharding, ns, "info")
 		assert.Equal(t, true, mongoWriter != nil, "should be equal")
 
 		// test connection
-		mongoTestConn, err := utils.NewMongoConn(TestMongoAddress, utils.ConnectModePrimary, true)
+		mongoTestConn, err := utils.NewMongoConn(TestMongoAddressSharding, utils.ConnectModePrimary, true)
 		assert.Equal(t, nil, err, "should be equal")
 		defer mongoTestConn.Close()
 
@@ -476,6 +477,341 @@ func TestMongo(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestMongoIndex(t *testing.T) {
+	var nr int
+
+	utils.InitialLogger("", "info", false)
+
+	// sharding: pid + sid, primaryKey: false
+	{
+		fmt.Printf("TestMongoIndex case %d.\n", nr)
+		nr++
+
+		conf.Options.TargetType = utils.TargetTypeMongo
+		conf.Options.TargetMongoDBType = utils.TargetMongoDBTypeSharding
+		conf.Options.ConvertType = utils.ConvertTypeChange
+
+		client := NewMongoWriter("test_mongo_addr", TestMongoAddressSharding, utils.NS{
+			Database:   TestWriteDb,
+			Collection: TestWriteTable,
+		})
+
+		err := client.DropTable()
+		assert.Equal(t, nil, err, "should be equal")
+
+		keyEle := []*dynamodb.KeySchemaElement{
+			{
+				AttributeName: aws.String("pid"),
+				KeyType:       aws.String("HASH"),
+			},
+			{
+				AttributeName: aws.String("sid"),
+				KeyType:       aws.String("RANGE"),
+			},
+		}
+		parseMap := map[string]string {
+			"pid": "S",
+			"sid": "S",
+		}
+		_, err = client.createSingleIndex(keyEle, parseMap, false)
+		assert.Equal(t, nil, err, "should be equal")
+
+		ix, err := client.conn.Session.DB(TestWriteDb).C(TestWriteTable).Indexes()
+		assert.Equal(t, nil, err, "should be equal")
+		assert.Equal(t, 3, len(ix), "should be equal") // _id + 2
+		assert.Equal(t, true, indexExists(ix, "pid_1_sid_1", false), "should be equal")
+		assert.Equal(t, true, indexExists(ix, "pid_hashed", false), "should be equal")
+
+		client.Close()
+	}
+
+	// sharding: pid + sid, primaryKey: true
+	{
+		fmt.Printf("TestMongoIndex case %d.\n", nr)
+		nr++
+
+		conf.Options.TargetType = utils.TargetTypeMongo
+		conf.Options.TargetMongoDBType = utils.TargetMongoDBTypeSharding
+		conf.Options.ConvertType = utils.ConvertTypeChange
+
+		client := NewMongoWriter("test_mongo_addr", TestMongoAddressSharding, utils.NS{
+			Database:   TestWriteDb,
+			Collection: TestWriteTable,
+		})
+
+		err := client.DropTable()
+		assert.Equal(t, nil, err, "should be equal")
+
+		keyEle := []*dynamodb.KeySchemaElement{
+			{
+				AttributeName: aws.String("pid"),
+				KeyType:       aws.String("HASH"),
+			},
+			{
+				AttributeName: aws.String("sid"),
+				KeyType:       aws.String("RANGE"),
+			},
+		}
+		parseMap := map[string]string {
+			"pid": "S",
+			"sid": "S",
+		}
+		_, err = client.createSingleIndex(keyEle, parseMap, true)
+		assert.Equal(t, nil, err, "should be equal")
+
+		ix, err := client.conn.Session.DB(TestWriteDb).C(TestWriteTable).Indexes()
+		assert.Equal(t, nil, err, "should be equal")
+		assert.Equal(t, 3, len(ix), "should be equal") // _id + 2
+		assert.Equal(t, true, indexExists(ix, "pid_1_sid_1", true), "should be equal")
+		assert.Equal(t, true, indexExists(ix, "pid_hashed", false), "should be equal")
+
+		client.Close()
+	}
+
+	// sharding: pid, primaryKey: false
+	{
+		fmt.Printf("TestMongoIndex case %d.\n", nr)
+		nr++
+
+		conf.Options.TargetType = utils.TargetTypeMongo
+		conf.Options.TargetMongoDBType = utils.TargetMongoDBTypeSharding
+		conf.Options.ConvertType = utils.ConvertTypeChange
+
+		client := NewMongoWriter("test_mongo_addr", TestMongoAddressSharding, utils.NS{
+			Database:   TestWriteDb,
+			Collection: TestWriteTable,
+		})
+
+		err := client.DropTable()
+		assert.Equal(t, nil, err, "should be equal")
+
+		keyEle := []*dynamodb.KeySchemaElement{
+			{
+				AttributeName: aws.String("pid"),
+				KeyType:       aws.String("HASH"),
+			},
+		}
+		parseMap := map[string]string {
+			"pid": "S",
+		}
+		_, err = client.createSingleIndex(keyEle, parseMap, false)
+		assert.Equal(t, nil, err, "should be equal")
+
+		ix, err := client.conn.Session.DB(TestWriteDb).C(TestWriteTable).Indexes()
+		assert.Equal(t, nil, err, "should be equal")
+		assert.Equal(t, 2, len(ix), "should be equal") // _id + 1
+		assert.Equal(t, true, indexExists(ix, "pid_hashed", false), "should be equal")
+
+		client.Close()
+	}
+
+	// sharding: pid, primaryKey: true
+	{
+		fmt.Printf("TestMongoIndex case %d.\n", nr)
+		nr++
+
+		conf.Options.TargetType = utils.TargetTypeMongo
+		conf.Options.TargetMongoDBType = utils.TargetMongoDBTypeSharding
+		conf.Options.ConvertType = utils.ConvertTypeChange
+
+		client := NewMongoWriter("test_mongo_addr", TestMongoAddressSharding, utils.NS{
+			Database:   TestWriteDb,
+			Collection: TestWriteTable,
+		})
+
+		err := client.DropTable()
+		assert.Equal(t, nil, err, "should be equal")
+
+		keyEle := []*dynamodb.KeySchemaElement{
+			{
+				AttributeName: aws.String("pid"),
+				KeyType:       aws.String("HASH"),
+			},
+		}
+		parseMap := map[string]string {
+			"pid": "S",
+		}
+		_, err = client.createSingleIndex(keyEle, parseMap, true)
+		assert.Equal(t, nil, err, "should be equal")
+
+		ix, err := client.conn.Session.DB(TestWriteDb).C(TestWriteTable).Indexes()
+		assert.Equal(t, nil, err, "should be equal")
+		assert.Equal(t, 2, len(ix), "should be equal") // _id + 1
+		assert.Equal(t, true, indexExists(ix, "pid_1", true), "should be equal")
+
+		client.Close()
+	}
+
+	// replica: pid + sid, primaryKey: false
+	{
+		fmt.Printf("TestMongoIndex case %d.\n", nr)
+		nr++
+
+		conf.Options.TargetType = utils.TargetTypeMongo
+		conf.Options.TargetMongoDBType = utils.TargetMongoDBTypeReplica
+		conf.Options.ConvertType = utils.ConvertTypeChange
+
+		client := NewMongoWriter("test_mongo_addr", TestMongoAddressReplica, utils.NS{
+			Database:   TestWriteDb,
+			Collection: TestWriteTable,
+		})
+
+		err := client.DropTable()
+		assert.Equal(t, nil, err, "should be equal")
+
+		keyEle := []*dynamodb.KeySchemaElement{
+			{
+				AttributeName: aws.String("pid"),
+				KeyType:       aws.String("HASH"),
+			},
+			{
+				AttributeName: aws.String("sid"),
+				KeyType:       aws.String("RANGE"),
+			},
+		}
+		parseMap := map[string]string {
+			"pid": "S",
+			"sid": "S",
+		}
+		_, err = client.createSingleIndex(keyEle, parseMap, false)
+		assert.Equal(t, nil, err, "should be equal")
+
+		ix, err := client.conn.Session.DB(TestWriteDb).C(TestWriteTable).Indexes()
+		assert.Equal(t, nil, err, "should be equal")
+		assert.Equal(t, 3, len(ix), "should be equal") // _id + 2
+		assert.Equal(t, true, indexExists(ix, "pid_1_sid_1", false), "should be equal")
+		assert.Equal(t, true, indexExists(ix, "pid_1", false), "should be equal")
+
+		client.Close()
+	}
+
+	// replica: pid + sid, primaryKey: true
+	{
+		fmt.Printf("TestMongoIndex case %d.\n", nr)
+		nr++
+
+		conf.Options.TargetType = utils.TargetTypeMongo
+		conf.Options.TargetMongoDBType = utils.TargetMongoDBTypeReplica
+		conf.Options.ConvertType = utils.ConvertTypeChange
+
+		client := NewMongoWriter("test_mongo_addr", TestMongoAddressReplica, utils.NS{
+			Database:   TestWriteDb,
+			Collection: TestWriteTable,
+		})
+
+		err := client.DropTable()
+		assert.Equal(t, nil, err, "should be equal")
+
+		keyEle := []*dynamodb.KeySchemaElement{
+			{
+				AttributeName: aws.String("pid"),
+				KeyType:       aws.String("HASH"),
+			},
+			{
+				AttributeName: aws.String("sid"),
+				KeyType:       aws.String("RANGE"),
+			},
+		}
+		parseMap := map[string]string {
+			"pid": "S",
+			"sid": "S",
+		}
+		_, err = client.createSingleIndex(keyEle, parseMap, true)
+		assert.Equal(t, nil, err, "should be equal")
+
+		ix, err := client.conn.Session.DB(TestWriteDb).C(TestWriteTable).Indexes()
+		assert.Equal(t, nil, err, "should be equal")
+		assert.Equal(t, 3, len(ix), "should be equal") // _id + 2
+		assert.Equal(t, true, indexExists(ix, "pid_1_sid_1", true), "should be equal")
+		assert.Equal(t, true, indexExists(ix, "pid_1", false), "should be equal")
+
+		client.Close()
+	}
+
+	// replica: pid, primaryKey: false
+	{
+		fmt.Printf("TestMongoIndex case %d.\n", nr)
+		nr++
+
+		conf.Options.TargetType = utils.TargetTypeMongo
+		conf.Options.TargetMongoDBType = utils.TargetMongoDBTypeReplica
+		conf.Options.ConvertType = utils.ConvertTypeChange
+
+		client := NewMongoWriter("test_mongo_addr", TestMongoAddressReplica, utils.NS{
+			Database:   TestWriteDb,
+			Collection: TestWriteTable,
+		})
+
+		err := client.DropTable()
+		assert.Equal(t, nil, err, "should be equal")
+
+		keyEle := []*dynamodb.KeySchemaElement{
+			{
+				AttributeName: aws.String("pid"),
+				KeyType:       aws.String("HASH"),
+			},
+		}
+		parseMap := map[string]string {
+			"pid": "S",
+		}
+		_, err = client.createSingleIndex(keyEle, parseMap, false)
+		assert.Equal(t, nil, err, "should be equal")
+
+		ix, err := client.conn.Session.DB(TestWriteDb).C(TestWriteTable).Indexes()
+		assert.Equal(t, nil, err, "should be equal")
+		assert.Equal(t, 2, len(ix), "should be equal") // _id + 2
+		assert.Equal(t, true, indexExists(ix, "pid_1", false), "should be equal")
+
+		client.Close()
+	}
+
+	// replica: pid, primaryKey: true
+	{
+		fmt.Printf("TestMongoIndex case %d.\n", nr)
+		nr++
+
+		conf.Options.TargetType = utils.TargetTypeMongo
+		conf.Options.TargetMongoDBType = utils.TargetMongoDBTypeReplica
+		conf.Options.ConvertType = utils.ConvertTypeChange
+
+		client := NewMongoWriter("test_mongo_addr", TestMongoAddressReplica, utils.NS{
+			Database:   TestWriteDb,
+			Collection: TestWriteTable,
+		})
+
+		err := client.DropTable()
+		assert.Equal(t, nil, err, "should be equal")
+
+		keyEle := []*dynamodb.KeySchemaElement{
+			{
+				AttributeName: aws.String("pid"),
+				KeyType:       aws.String("HASH"),
+			},
+		}
+		parseMap := map[string]string {
+			"pid": "S",
+		}
+		_, err = client.createSingleIndex(keyEle, parseMap, true)
+		assert.Equal(t, nil, err, "should be equal")
+
+		ix, err := client.conn.Session.DB(TestWriteDb).C(TestWriteTable).Indexes()
+		assert.Equal(t, nil, err, "should be equal")
+		assert.Equal(t, 2, len(ix), "should be equal") // _id + 2
+		assert.Equal(t, true, indexExists(ix, "pid_1", true), "should be equal")
+
+		client.Close()
+	}
+}
+
+func indexExists(ixes []mgo.Index, name string, unique bool) bool {
+	for _, ix := range ixes {
+		if ix.Name == name {
+			return ix.Unique == unique
+		}
+	}
+	return false
 }
 
 /*
