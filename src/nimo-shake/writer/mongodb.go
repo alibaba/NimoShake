@@ -295,7 +295,7 @@ func (mw *MongoWriter) createSingleIndex(primaryIndexes []*dynamodb.KeySchemaEle
 	}
 
 	primaryKeyWithType := mw.fetchKey(primaryKey, parseMap[primaryKey])
-	indexList := make([]string, 0)
+	indexList := make([]string, 0, 2)
 	indexList = append(indexList, primaryKeyWithType)
 	if sortKey != "" {
 		indexList = append(indexList, mw.fetchKey(sortKey, parseMap[sortKey]))
@@ -303,22 +303,35 @@ func (mw *MongoWriter) createSingleIndex(primaryIndexes []*dynamodb.KeySchemaEle
 
 	LOG.Info("ns[%s] single index[%v] list[%v]", mw.ns, primaryKeyWithType, indexList)
 
-	// create union unique index if input is partition key
-	if len(indexList) >= 1 && isPrimaryKey {
+	// primary key should be unique
+	unique := isPrimaryKey
+
+	// create union unique index
+	if len(indexList) >= 2 {
 		// write index
 		index := mgo.Index{
 			Key:        indexList,
-			Unique:     true,
 			Background: true,
+			Unique:     unique,
 		}
+
+		LOG.Info("create union-index isPrimary[%v]: %v", isPrimaryKey, index.Key)
+
 		if err := mw.conn.Session.DB(mw.ns.Database).C(mw.ns.Collection).EnsureIndex(index); err != nil {
-			return "", fmt.Errorf("create primary union unique index failed[%v]", err)
+			return "", fmt.Errorf("create primary union unique[%v] index failed[%v]", unique, err)
 		}
 	}
 
 	var indexType interface{}
 	indexType = "hashed"
 	if conf.Options.TargetMongoDBType == utils.TargetMongoDBTypeReplica {
+		indexType = 1
+	}
+	if len(indexList) >= 2 {
+		// unique has already be set on the above index
+		unique = false
+	} else if unique {
+		// must be range if only has 1 key
 		indexType = 1
 	}
 
@@ -331,6 +344,7 @@ func (mw *MongoWriter) createSingleIndex(primaryIndexes []*dynamodb.KeySchemaEle
 				},
 				"name":       fmt.Sprintf("%s_%v", primaryKeyWithType, indexType),
 				"background": true,
+				"unique":     unique,
 			},
 		}},
 	}

@@ -4,6 +4,7 @@
 	* IMPROVE: enable MongoDB unordered bulk write.
 	* IMPROVE: create range index instead of hash index when target mongodb
 	type is replcaSet.
+	* BUGFIX: create union index for gsi and lsi.
 
 2021-02-25
 	* VERSION: 1.0.8
