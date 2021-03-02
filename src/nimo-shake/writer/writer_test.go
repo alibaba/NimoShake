@@ -451,7 +451,7 @@ func TestMongo(t *testing.T) {
 		input2 := make([]interface{}, 0, 10)
 		for i := 5; i <= 15; i++ {
 			pidS := fmt.Sprintf("%d", i)
-			input2 = append(input2, bson.M{
+			input2 = append(input2, bson2.M{
 				"pid":  pidS,
 				"sid":  i * 100,
 				"data": i * 100,

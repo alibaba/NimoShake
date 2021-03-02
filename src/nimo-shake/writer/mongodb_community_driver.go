@@ -6,7 +6,6 @@ import (
 
 	LOG "github.com/vinllen/log4go"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"github.com/vinllen/mgo"
 	"nimo-shake/configure"
 	"strings"
 	"context"
@@ -120,8 +119,7 @@ func (mcw *MongoCommunityWriter) WriteBulk(input []interface{}) error {
 
 	_, err := mcw.conn.Client.Database(mcw.ns.Database).Collection(mcw.ns.Collection).BulkWrite(nil, models)
 	if err != nil {
-		// TODO, duplicate mgo
-		if mgo.IsDup(err) {
+		if strings.Contains(err.Error(), "duplicate key error") {
 			LOG.Warn("%s duplicated document found[%v]. reinsert or update", err, mcw)
 			if !conf.Options.FullExecutorInsertOnDupUpdate || len(mcw.primaryIndexes) == 0 {
 				LOG.Error("full.executor.insert_on_dup_update==[%v], primaryIndexes length[%v]", conf.Options.FullExecutorInsertOnDupUpdate,
@@ -245,6 +243,7 @@ func (mcw *MongoCommunityWriter) Update(input []interface{}, index []interface{}
 		if strings.Contains(err.Error(), "duplicate key error") {
 			return mcw.updateOnInsert(input, index)
 		}
+
 		return err
 	}
 
