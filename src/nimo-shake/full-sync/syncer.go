@@ -2,7 +2,6 @@ package full_sync
 
 import (
 	"sync"
-	"time"
 	"fmt"
 	"strings"
 
@@ -13,10 +12,11 @@ import (
 
 	LOG "github.com/vinllen/log4go"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"github.com/vinllen/mgo/bson"
-	"github.com/vinllen/mgo"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/gugemichael/nimo4go"
+	"time"
+	"github.com/vinllen/mongo-go-driver/mongo"
+	bson2 "github.com/vinllen/mongo-go-driver/bson"
 )
 
 var (
@@ -92,7 +92,8 @@ func checkTableExists(tableList []string, w writer.Writer) error {
 	LOG.Info("target.db.exist is set[%v]", conf.Options.TargetDBExist)
 	switch conf.Options.TargetType {
 	case utils.TargetTypeMongo:
-		sess := w.GetSession().(*mgo.Session)
+		// mgo driver
+		/*sess := w.GetSession().(*mgo.Session)
 
 		now := time.Now().Format(utils.GolangSecurityTime)
 		collections, err := sess.DB(conf.Options.Id).CollectionNames()
@@ -118,6 +119,41 @@ func checkTableExists(tableList []string, w writer.Writer) error {
 						bson.DocElem{"to", toCollection},
 						bson.DocElem{"dropTarget", false},
 					}, nil); err != nil {
+						return fmt.Errorf("rename target collection[%v] failed[%v]", table, err)
+					}
+				} else {
+					return fmt.Errorf("collection[%v] exists on the target", table)
+				}
+			}
+		}*/
+
+		sess := w.GetSession().(*mongo.Client)
+
+		now := time.Now().Format(utils.GolangSecurityTime)
+		collections, err := sess.Database(conf.Options.Id).ListCollectionNames(nil, bson2.M{})
+		if err != nil {
+			return fmt.Errorf("get target collection names error[%v]", err)
+		}
+
+		collectionsMp := utils.StringListToMap(collections)
+		for _, table := range tableList {
+			// check exist on the target mongodb
+			if _, ok := collectionsMp[table]; ok {
+				// exist
+				LOG.Info("table[%v] exists", table)
+				if conf.Options.TargetDBExist == utils.TargetDBExistDrop {
+					if err := sess.Database(conf.Options.Id).Collection(table).Drop(nil); err != nil {
+						return fmt.Errorf("drop target collection[%v] failed[%v]", table, err)
+					}
+				} else if conf.Options.TargetDBExist == utils.TargetDBExistRename {
+					fromCollection := fmt.Sprintf("%s.%s", conf.Options.Id, table)
+					toCollection := fmt.Sprintf("%s.%s_%v", conf.Options.Id, table, now)
+					res := sess.Database("admin").RunCommand(nil, bson2.D{
+						{"renameCollection", fromCollection},
+						{"to", toCollection},
+						{"dropTarget", false},
+					})
+					if err := res.Err(); err != nil {
 						return fmt.Errorf("rename target collection[%v] failed[%v]", table, err)
 					}
 				} else {

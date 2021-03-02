@@ -12,10 +12,7 @@ import (
 	"strings"
 )
 
-const (
-	NumInitialChunks = 1024
-)
-
+// deprecated
 type MongoWriter struct {
 	Name           string
 	ns             utils.NS

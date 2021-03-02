@@ -5,10 +5,14 @@ import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
 	"time"
+	"nimo-shake/configure"
 )
 
 func TestDocumentSyncer(t *testing.T) {
 	// test documentSyncer main function
+
+	conf.Options.FullDocumentWriteBatch = 25
+	batchNumber := int(conf.Options.FullDocumentWriteBatch)
 
 	var nr int
 	{
