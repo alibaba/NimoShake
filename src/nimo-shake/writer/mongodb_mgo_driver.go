@@ -233,6 +233,7 @@ func (mw *MongoWriter) Update(input []interface{}, index []interface{}) error {
 		}
 
 		if mgo.IsDup(err) {
+			LOG.Info("error[%v] is dup, ignore", err)
 			return mw.updateOnInsert(input[idx+1:], index[idx+1:])
 		}
 		return err

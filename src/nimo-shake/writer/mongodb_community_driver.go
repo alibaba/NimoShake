@@ -198,6 +198,11 @@ func (mcw *MongoCommunityWriter) updateOnInsert(input []interface{}, index []int
 				return nil
 			}
 
+			if strings.Contains(err.Error(), "duplicate key error") {
+				// ignore duplicate key
+				continue
+			}
+
 			return err
 		}
 	}
