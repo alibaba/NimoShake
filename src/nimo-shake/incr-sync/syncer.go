@@ -434,7 +434,7 @@ func (d *Dispatcher) batcher() {
 			}
 
 			switch d.targetWriter.(type) {
-			case *writer.MongoWriter:
+			case *writer.MongoCommunityWriter:
 				node.operate = append(node.operate, value.(protocal.RawData).Data)
 				node.index = append(node.index, index.(protocal.RawData).Data)
 			case *writer.DynamoProxyWriter:
@@ -450,7 +450,7 @@ func (d *Dispatcher) batcher() {
 			}
 
 			switch d.targetWriter.(type) {
-			case *writer.MongoWriter:
+			case *writer.MongoCommunityWriter:
 				node.operate = append(node.operate, value.(protocal.RawData).Data)
 				node.index = append(node.index, index.(protocal.RawData).Data)
 			case *writer.DynamoProxyWriter:
@@ -461,7 +461,7 @@ func (d *Dispatcher) batcher() {
 			}
 		case EventRemove:
 			switch d.targetWriter.(type) {
-			case *writer.MongoWriter:
+			case *writer.MongoCommunityWriter:
 				node.index = append(node.index, index.(protocal.RawData).Data)
 			case *writer.DynamoProxyWriter:
 				node.index = append(node.index, index)

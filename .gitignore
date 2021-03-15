@@ -26,3 +26,4 @@ diagnostic/
 *.pid
 src/vendor/*
 !src/vendor/vendor.json
+test_checkpoint_db

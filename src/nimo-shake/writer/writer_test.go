@@ -13,6 +13,8 @@ import (
 	"github.com/vinllen/mgo"
 	"github.com/vinllen/mgo/bson"
 	"nimo-shake/unit_test_common"
+	"context"
+	bson2 "github.com/vinllen/mongo-go-driver/bson"
 )
 
 const (
@@ -449,7 +451,7 @@ func TestMongo(t *testing.T) {
 		input2 := make([]interface{}, 0, 10)
 		for i := 5; i <= 15; i++ {
 			pidS := fmt.Sprintf("%d", i)
-			input2 = append(input2, bson.M{
+			input2 = append(input2, bson2.M{
 				"pid":  pidS,
 				"sid":  i * 100,
 				"data": i * 100,
@@ -493,7 +495,7 @@ func TestMongoIndex(t *testing.T) {
 		conf.Options.TargetMongoDBType = utils.TargetMongoDBTypeSharding
 		conf.Options.ConvertType = utils.ConvertTypeChange
 
-		client := NewMongoWriter("test_mongo_addr", TestMongoAddressSharding, utils.NS{
+		client := NewMongoCommunityWriter("test_mongo_addr", TestMongoAddressSharding, utils.NS{
 			Database:   TestWriteDb,
 			Collection: TestWriteTable,
 		})
@@ -518,11 +520,14 @@ func TestMongoIndex(t *testing.T) {
 		_, err = client.createSingleIndex(keyEle, parseMap, false)
 		assert.Equal(t, nil, err, "should be equal")
 
-		ix, err := client.conn.Session.DB(TestWriteDb).C(TestWriteTable).Indexes()
+		res := make([]bson2.M, 0)
+		cursor, err := client.conn.Client.Database(TestWriteDb).Collection(TestWriteTable).Indexes().List(context.Background())
 		assert.Equal(t, nil, err, "should be equal")
-		assert.Equal(t, 3, len(ix), "should be equal") // _id + 2
-		assert.Equal(t, true, indexExists(ix, "pid_1_sid_1", false), "should be equal")
-		assert.Equal(t, true, indexExists(ix, "pid_hashed", false), "should be equal")
+		err = cursor.All(context.Background(), &res)
+
+		assert.Equal(t, 3, len(res), "should be equal") // _id + 2
+		assert.Equal(t, true, indexExists(res, "pid_1_sid_1", false), "should be equal")
+		assert.Equal(t, true, indexExists(res, "pid_hashed", false), "should be equal")
 
 		client.Close()
 	}
@@ -536,7 +541,7 @@ func TestMongoIndex(t *testing.T) {
 		conf.Options.TargetMongoDBType = utils.TargetMongoDBTypeSharding
 		conf.Options.ConvertType = utils.ConvertTypeChange
 
-		client := NewMongoWriter("test_mongo_addr", TestMongoAddressSharding, utils.NS{
+		client := NewMongoCommunityWriter("test_mongo_addr", TestMongoAddressSharding, utils.NS{
 			Database:   TestWriteDb,
 			Collection: TestWriteTable,
 		})
@@ -561,11 +566,14 @@ func TestMongoIndex(t *testing.T) {
 		_, err = client.createSingleIndex(keyEle, parseMap, true)
 		assert.Equal(t, nil, err, "should be equal")
 
-		ix, err := client.conn.Session.DB(TestWriteDb).C(TestWriteTable).Indexes()
+		res := make([]bson2.M, 0)
+		cursor, err := client.conn.Client.Database(TestWriteDb).Collection(TestWriteTable).Indexes().List(context.Background())
 		assert.Equal(t, nil, err, "should be equal")
-		assert.Equal(t, 3, len(ix), "should be equal") // _id + 2
-		assert.Equal(t, true, indexExists(ix, "pid_1_sid_1", true), "should be equal")
-		assert.Equal(t, true, indexExists(ix, "pid_hashed", false), "should be equal")
+		err = cursor.All(context.Background(), &res)
+
+		assert.Equal(t, 3, len(res), "should be equal") // _id + 2
+		assert.Equal(t, true, indexExists(res, "pid_1_sid_1", true), "should be equal")
+		assert.Equal(t, true, indexExists(res, "pid_hashed", false), "should be equal")
 
 		client.Close()
 	}
@@ -579,7 +587,7 @@ func TestMongoIndex(t *testing.T) {
 		conf.Options.TargetMongoDBType = utils.TargetMongoDBTypeSharding
 		conf.Options.ConvertType = utils.ConvertTypeChange
 
-		client := NewMongoWriter("test_mongo_addr", TestMongoAddressSharding, utils.NS{
+		client := NewMongoCommunityWriter("test_mongo_addr", TestMongoAddressSharding, utils.NS{
 			Database:   TestWriteDb,
 			Collection: TestWriteTable,
 		})
@@ -599,10 +607,13 @@ func TestMongoIndex(t *testing.T) {
 		_, err = client.createSingleIndex(keyEle, parseMap, false)
 		assert.Equal(t, nil, err, "should be equal")
 
-		ix, err := client.conn.Session.DB(TestWriteDb).C(TestWriteTable).Indexes()
+		res := make([]bson2.M, 0)
+		cursor, err := client.conn.Client.Database(TestWriteDb).Collection(TestWriteTable).Indexes().List(context.Background())
 		assert.Equal(t, nil, err, "should be equal")
-		assert.Equal(t, 2, len(ix), "should be equal") // _id + 1
-		assert.Equal(t, true, indexExists(ix, "pid_hashed", false), "should be equal")
+		err = cursor.All(context.Background(), &res)
+
+		assert.Equal(t, 2, len(res), "should be equal") // _id + 1
+		assert.Equal(t, true, indexExists(res, "pid_hashed", false), "should be equal")
 
 		client.Close()
 	}
@@ -616,7 +627,7 @@ func TestMongoIndex(t *testing.T) {
 		conf.Options.TargetMongoDBType = utils.TargetMongoDBTypeSharding
 		conf.Options.ConvertType = utils.ConvertTypeChange
 
-		client := NewMongoWriter("test_mongo_addr", TestMongoAddressSharding, utils.NS{
+		client := NewMongoCommunityWriter("test_mongo_addr", TestMongoAddressSharding, utils.NS{
 			Database:   TestWriteDb,
 			Collection: TestWriteTable,
 		})
@@ -636,10 +647,13 @@ func TestMongoIndex(t *testing.T) {
 		_, err = client.createSingleIndex(keyEle, parseMap, true)
 		assert.Equal(t, nil, err, "should be equal")
 
-		ix, err := client.conn.Session.DB(TestWriteDb).C(TestWriteTable).Indexes()
+		res := make([]bson2.M, 0)
+		cursor, err := client.conn.Client.Database(TestWriteDb).Collection(TestWriteTable).Indexes().List(context.Background())
 		assert.Equal(t, nil, err, "should be equal")
-		assert.Equal(t, 2, len(ix), "should be equal") // _id + 1
-		assert.Equal(t, true, indexExists(ix, "pid_1", true), "should be equal")
+		err = cursor.All(context.Background(), &res)
+
+		assert.Equal(t, 2, len(res), "should be equal") // _id + 1
+		assert.Equal(t, true, indexExists(res, "pid_1", true), "should be equal")
 
 		client.Close()
 	}
@@ -653,7 +667,7 @@ func TestMongoIndex(t *testing.T) {
 		conf.Options.TargetMongoDBType = utils.TargetMongoDBTypeReplica
 		conf.Options.ConvertType = utils.ConvertTypeChange
 
-		client := NewMongoWriter("test_mongo_addr", TestMongoAddressReplica, utils.NS{
+		client := NewMongoCommunityWriter("test_mongo_addr", TestMongoAddressReplica, utils.NS{
 			Database:   TestWriteDb,
 			Collection: TestWriteTable,
 		})
@@ -678,11 +692,14 @@ func TestMongoIndex(t *testing.T) {
 		_, err = client.createSingleIndex(keyEle, parseMap, false)
 		assert.Equal(t, nil, err, "should be equal")
 
-		ix, err := client.conn.Session.DB(TestWriteDb).C(TestWriteTable).Indexes()
+		res := make([]bson2.M, 0)
+		cursor, err := client.conn.Client.Database(TestWriteDb).Collection(TestWriteTable).Indexes().List(context.Background())
 		assert.Equal(t, nil, err, "should be equal")
-		assert.Equal(t, 3, len(ix), "should be equal") // _id + 2
-		assert.Equal(t, true, indexExists(ix, "pid_1_sid_1", false), "should be equal")
-		assert.Equal(t, true, indexExists(ix, "pid_1", false), "should be equal")
+		err = cursor.All(context.Background(), &res)
+
+		assert.Equal(t, 3, len(res), "should be equal") // _id + 2
+		assert.Equal(t, true, indexExists(res, "pid_1_sid_1", false), "should be equal")
+		assert.Equal(t, true, indexExists(res, "pid_1", false), "should be equal")
 
 		client.Close()
 	}
@@ -696,7 +713,7 @@ func TestMongoIndex(t *testing.T) {
 		conf.Options.TargetMongoDBType = utils.TargetMongoDBTypeReplica
 		conf.Options.ConvertType = utils.ConvertTypeChange
 
-		client := NewMongoWriter("test_mongo_addr", TestMongoAddressReplica, utils.NS{
+		client := NewMongoCommunityWriter("test_mongo_addr", TestMongoAddressReplica, utils.NS{
 			Database:   TestWriteDb,
 			Collection: TestWriteTable,
 		})
@@ -721,11 +738,14 @@ func TestMongoIndex(t *testing.T) {
 		_, err = client.createSingleIndex(keyEle, parseMap, true)
 		assert.Equal(t, nil, err, "should be equal")
 
-		ix, err := client.conn.Session.DB(TestWriteDb).C(TestWriteTable).Indexes()
+		res := make([]bson2.M, 0)
+		cursor, err := client.conn.Client.Database(TestWriteDb).Collection(TestWriteTable).Indexes().List(context.Background())
 		assert.Equal(t, nil, err, "should be equal")
-		assert.Equal(t, 3, len(ix), "should be equal") // _id + 2
-		assert.Equal(t, true, indexExists(ix, "pid_1_sid_1", true), "should be equal")
-		assert.Equal(t, true, indexExists(ix, "pid_1", false), "should be equal")
+		err = cursor.All(context.Background(), &res)
+
+		assert.Equal(t, 3, len(res), "should be equal") // _id + 2
+		assert.Equal(t, true, indexExists(res, "pid_1_sid_1", true), "should be equal")
+		assert.Equal(t, true, indexExists(res, "pid_1", false), "should be equal")
 
 		client.Close()
 	}
@@ -739,7 +759,7 @@ func TestMongoIndex(t *testing.T) {
 		conf.Options.TargetMongoDBType = utils.TargetMongoDBTypeReplica
 		conf.Options.ConvertType = utils.ConvertTypeChange
 
-		client := NewMongoWriter("test_mongo_addr", TestMongoAddressReplica, utils.NS{
+		client := NewMongoCommunityWriter("test_mongo_addr", TestMongoAddressReplica, utils.NS{
 			Database:   TestWriteDb,
 			Collection: TestWriteTable,
 		})
@@ -759,10 +779,14 @@ func TestMongoIndex(t *testing.T) {
 		_, err = client.createSingleIndex(keyEle, parseMap, false)
 		assert.Equal(t, nil, err, "should be equal")
 
-		ix, err := client.conn.Session.DB(TestWriteDb).C(TestWriteTable).Indexes()
+		res := make([]bson2.M, 0)
+		cursor, err := client.conn.Client.Database(TestWriteDb).Collection(TestWriteTable).Indexes().List(context.Background())
 		assert.Equal(t, nil, err, "should be equal")
-		assert.Equal(t, 2, len(ix), "should be equal") // _id + 2
-		assert.Equal(t, true, indexExists(ix, "pid_1", false), "should be equal")
+		err = cursor.All(context.Background(), &res)
+
+		assert.Equal(t, 2, len(res), "should be equal") // _id + 2
+		assert.Equal(t, true, indexExists(res, "pid_1", false), "should be equal")
+
 
 		client.Close()
 	}
@@ -776,7 +800,7 @@ func TestMongoIndex(t *testing.T) {
 		conf.Options.TargetMongoDBType = utils.TargetMongoDBTypeReplica
 		conf.Options.ConvertType = utils.ConvertTypeChange
 
-		client := NewMongoWriter("test_mongo_addr", TestMongoAddressReplica, utils.NS{
+		client := NewMongoCommunityWriter("test_mongo_addr", TestMongoAddressReplica, utils.NS{
 			Database:   TestWriteDb,
 			Collection: TestWriteTable,
 		})
@@ -796,19 +820,29 @@ func TestMongoIndex(t *testing.T) {
 		_, err = client.createSingleIndex(keyEle, parseMap, true)
 		assert.Equal(t, nil, err, "should be equal")
 
-		ix, err := client.conn.Session.DB(TestWriteDb).C(TestWriteTable).Indexes()
+		res := make([]bson2.M, 0)
+		cursor, err := client.conn.Client.Database(TestWriteDb).Collection(TestWriteTable).Indexes().List(context.Background())
 		assert.Equal(t, nil, err, "should be equal")
-		assert.Equal(t, 2, len(ix), "should be equal") // _id + 2
-		assert.Equal(t, true, indexExists(ix, "pid_1", true), "should be equal")
+		err = cursor.All(context.Background(), &res)
+
+		assert.Equal(t, 2, len(res), "should be equal") // _id + 2
+		assert.Equal(t, true, indexExists(res, "pid_1", true), "should be equal")
 
 		client.Close()
 	}
 }
 
-func indexExists(ixes []mgo.Index, name string, unique bool) bool {
+func indexExists(ixes []bson2.M, name string, unique bool) bool {
+	fmt.Println(ixes, name, unique)
+
 	for _, ix := range ixes {
-		if ix.Name == name {
-			return ix.Unique == unique
+		if ix["name"] == name {
+			ixUniq, ok := ix["unique"]
+			if !ok {
+				ixUniq = false
+			}
+
+			return ixUniq == unique
 		}
 	}
 	return false
