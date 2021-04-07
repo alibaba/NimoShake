@@ -1,3 +1,7 @@
+2021-04-07
+	* VERSION: 1.0.11
+	* IMPROVE: data source support endpoint_url.
+
 2021-03-02
 	* VERSION: 1.0.10
 	* IMPROVE: replace mgo driver with mongo.go.driver

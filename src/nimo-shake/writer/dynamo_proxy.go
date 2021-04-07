@@ -71,27 +71,41 @@ func (dpw *DynamoProxyWriter) CreateTable(tableDescribe *dynamodb.TableDescripti
 		TableName:            tableDescribe.TableName,
 	}
 
+	LOG.Info("try create table: %v", *tableDescribe)
+
 	if conf.Options.FullEnableIndexUser {
 		// convert []*GlobalSecondaryIndexDescription => []*GlobalSecondaryIndex
 		gsiList := make([]*dynamodb.GlobalSecondaryIndex, 0, len(tableDescribe.GlobalSecondaryIndexes))
 		for _, gsiDesc := range tableDescribe.GlobalSecondaryIndexes {
-			gsiList = append(gsiList, &dynamodb.GlobalSecondaryIndex{
-				IndexName: gsiDesc.IndexName,
-				KeySchema: gsiDesc.KeySchema,
+			gsiIndex := &dynamodb.GlobalSecondaryIndex{
+				IndexName:  gsiDesc.IndexName,
+				KeySchema:  gsiDesc.KeySchema,
 				Projection: gsiDesc.Projection,
 				// ProvisionedThroughput: gsiDesc.ProvisionedThroughput,
-			})
+			}
+
+			// meaningless, support aliyun_dynamodb
+			if gsiDesc.Projection == nil {
+				gsiIndex.Projection = &dynamodb.Projection{}
+			}
+			gsiList = append(gsiList, gsiIndex)
 		}
 		createTableInput.SetGlobalSecondaryIndexes(gsiList)
 
 		// convert []*LocalSecondaryIndexDescription => []*LocalSecondaryIndex
 		lsiList := make([]*dynamodb.LocalSecondaryIndex, 0, len(tableDescribe.LocalSecondaryIndexes))
 		for _, lsiDesc := range tableDescribe.LocalSecondaryIndexes {
-			lsiList = append(lsiList, &dynamodb.LocalSecondaryIndex{
-				IndexName: lsiDesc.IndexName,
-				KeySchema: lsiDesc.KeySchema,
+			lsiIndex := &dynamodb.LocalSecondaryIndex{
+				IndexName:  lsiDesc.IndexName,
+				KeySchema:  lsiDesc.KeySchema,
 				Projection: lsiDesc.Projection,
-			})
+			}
+
+			// meaningless, support aliyun_dynamodb
+			if lsiDesc.Projection == nil {
+				lsiIndex.Projection = &dynamodb.Projection{}
+			}
+			lsiList = append(lsiList, lsiIndex)
 		}
 		createTableInput.SetLocalSecondaryIndexes(lsiList)
 	}
