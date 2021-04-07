@@ -15,6 +15,7 @@ type Configuration struct {
 	SourceSecretAccessKey             string `config:"source.secret_access_key"`
 	SourceSessionToken                string `config:"source.session_token"`
 	SourceRegion                      string `config:"source.region"`
+	SourceEndpointUrl                 string `config:"source.endpoint_url"`
 	SourceSessionMaxRetries           uint   `config:"source.session.max_retries"`
 	SourceSessionTimeout              uint   `config:"source.session.timeout"`
 	QpsFull                           uint   `config:"qps.full"`

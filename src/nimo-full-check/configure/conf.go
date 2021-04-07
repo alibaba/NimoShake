@@ -7,6 +7,7 @@ var Opts struct {
 	SourceSecretAccessKey string `long:"sourceSecretAccessKey" description:"dynamodb source secret access key"`
 	SourceSessionToken    string `long:"sourceSessionToken" default:"" description:"dynamodb source session token"`
 	SourceRegion          string `long:"sourceRegion" default:"" description:"dynamodb source region"`
+	SourceEndpointUrl     string `long:"sourceEndpointUrl" default:"" description:"dynamodb source endpoint_url"`
 	QpsFull               int    `long:"qpsFull" default:"" description:"qps of scan command, default is 10000"`
 	QpsFullBatchNum       int64  `long:"qpsFullBatchNum" default:"" description:"batch number in each scan command, default is 128"`
 	TargetAddress         string `short:"t" long:"targetAddress" description:"mongodb target address"`

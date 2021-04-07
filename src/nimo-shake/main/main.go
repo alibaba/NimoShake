@@ -183,7 +183,7 @@ func sanitizeOptions() error {
 		conf.Options.TargetDBExist != utils.TargetDBExistDrop ||
 		conf.Options.TargetType == utils.TargetTypeAliyunDynamoProxy && conf.Options.TargetDBExist != "" &&
 		conf.Options.TargetDBExist != utils.TargetDBExistDrop {
-		return fmt.Errorf("illegal target.mongodb.exist[%v] when target.type=%v",
+		return fmt.Errorf("target.mongodb.exist[%v] should be 'drop' when target.type=%v",
 			conf.Options.TargetDBExist, conf.Options.TargetType)
 	}
 	// set ConvertType
@@ -216,6 +216,10 @@ func sanitizeOptions() error {
 			(!conf.Options.IncreaseExecutorUpsert || !conf.Options.IncreaseExecutorInsertOnDupUpdate) {
 		return fmt.Errorf("increase.executor.upsert and increase.executor.insert_on_dup_update should be " +
 			"enable when target type is %v", utils.TargetTypeAliyunDynamoProxy)
+	}
+
+	if conf.Options.SourceEndpointUrl != "" && conf.Options.SyncMode != "full" {
+		return fmt.Errorf("only support sync.mode=full when source.endpoint_url is set")
 	}
 
 	return nil

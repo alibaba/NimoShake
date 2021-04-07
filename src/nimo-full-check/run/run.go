@@ -10,7 +10,8 @@ import (
 
 func Start() {
 	if err := shakeUtils.InitSession(conf.Opts.SourceAccessKeyID, conf.Opts.SourceSecretAccessKey,
-			conf.Opts.SourceSessionToken, conf.Opts.SourceRegion, 3, 5000); err != nil {
+			conf.Opts.SourceSessionToken, conf.Opts.SourceRegion, conf.Opts.SourceEndpointUrl,
+			3, 5000); err != nil {
 		LOG.Crashf("init global session failed[%v]", err)
 	}
 

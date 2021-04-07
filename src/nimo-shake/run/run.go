@@ -24,8 +24,8 @@ func Start() {
 	filter.Init(conf.Options.FilterCollectionWhite, conf.Options.FilterCollectionBlack)
 
 	if err := utils.InitSession(conf.Options.SourceAccessKeyID, conf.Options.SourceSecretAccessKey,
-			conf.Options.SourceSessionToken, conf.Options.SourceRegion, conf.Options.SourceSessionMaxRetries,
-			conf.Options.SourceSessionTimeout); err != nil {
+			conf.Options.SourceSessionToken, conf.Options.SourceRegion, conf.Options.SourceEndpointUrl,
+		conf.Options.SourceSessionMaxRetries, conf.Options.SourceSessionTimeout); err != nil {
 		LOG.Crashf("init global session failed[%v]", err)
 	}
 
