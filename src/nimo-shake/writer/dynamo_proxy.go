@@ -1,18 +1,18 @@
 package writer
 
 import (
-	"fmt"
 	"bytes"
+	"fmt"
 	"net/http"
 	"time"
 
-	"nimo-shake/common"
-	"nimo-shake/configure"
+	utils "github.com/alibaba/NimoShake/src/nimo-shake/common"
+	conf "github.com/alibaba/NimoShake/src/nimo-shake/configure"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
-	LOG "github.com/vinllen/log4go"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
+	LOG "github.com/vinllen/log4go"
 )
 
 type DynamoProxyWriter struct {
@@ -76,8 +76,8 @@ func (dpw *DynamoProxyWriter) CreateTable(tableDescribe *dynamodb.TableDescripti
 		gsiList := make([]*dynamodb.GlobalSecondaryIndex, 0, len(tableDescribe.GlobalSecondaryIndexes))
 		for _, gsiDesc := range tableDescribe.GlobalSecondaryIndexes {
 			gsiList = append(gsiList, &dynamodb.GlobalSecondaryIndex{
-				IndexName: gsiDesc.IndexName,
-				KeySchema: gsiDesc.KeySchema,
+				IndexName:  gsiDesc.IndexName,
+				KeySchema:  gsiDesc.KeySchema,
 				Projection: gsiDesc.Projection,
 				// ProvisionedThroughput: gsiDesc.ProvisionedThroughput,
 			})
@@ -88,8 +88,8 @@ func (dpw *DynamoProxyWriter) CreateTable(tableDescribe *dynamodb.TableDescripti
 		lsiList := make([]*dynamodb.LocalSecondaryIndex, 0, len(tableDescribe.LocalSecondaryIndexes))
 		for _, lsiDesc := range tableDescribe.LocalSecondaryIndexes {
 			lsiList = append(lsiList, &dynamodb.LocalSecondaryIndex{
-				IndexName: lsiDesc.IndexName,
-				KeySchema: lsiDesc.KeySchema,
+				IndexName:  lsiDesc.IndexName,
+				KeySchema:  lsiDesc.KeySchema,
 				Projection: lsiDesc.Projection,
 			})
 		}

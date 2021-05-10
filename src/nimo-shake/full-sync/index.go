@@ -4,14 +4,14 @@ import (
 	"fmt"
 	"strings"
 
-	"nimo-shake/common"
-	"nimo-shake/configure"
+	utils "github.com/alibaba/NimoShake/src/nimo-shake/common"
+	conf "github.com/alibaba/NimoShake/src/nimo-shake/configure"
 
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/service/dynamodb"
+	LOG "github.com/vinllen/log4go"
 	"github.com/vinllen/mgo"
 	"github.com/vinllen/mgo/bson"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"github.com/aws/aws-sdk-go/aws"
-	LOG "github.com/vinllen/log4go"
 )
 
 const (
@@ -124,7 +124,7 @@ func (ix *Index) createUserIndex(globalSecondaryIndexes []*dynamodb.GlobalSecond
 }
 
 func (ix *Index) createSingleIndex(primaryIndexes []*dynamodb.KeySchemaElement, parseMap map[string]string,
-		isPrimaryKey bool) (string, error) {
+	isPrimaryKey bool) (string, error) {
 	primaryKey, sortKey, err := utils.ParsePrimaryAndSortKey(primaryIndexes, parseMap)
 	if err != nil {
 		return "", fmt.Errorf("parse primary and sort key failed[%v]", err)
@@ -156,7 +156,7 @@ func (ix *Index) createSingleIndex(primaryIndexes []*dynamodb.KeySchemaElement, 
 		{Name: "createIndexes", Value: ix.ns.Collection},
 		{Name: "indexes", Value: []bson.M{
 			{
-				"key": bson.M {
+				"key": bson.M{
 					primaryKeyWithType: "hashed",
 				},
 				"name": fmt.Sprintf("%s_%s", primaryKeyWithType, "hashed"),

@@ -1,15 +1,17 @@
 package writer
 
 import (
-	"nimo-shake/common"
 	"fmt"
 
-	LOG "github.com/vinllen/log4go"
+	utils "github.com/alibaba/NimoShake/src/nimo-shake/common"
+
+	"strings"
+
+	conf "github.com/alibaba/NimoShake/src/nimo-shake/configure"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
+	LOG "github.com/vinllen/log4go"
 	"github.com/vinllen/mgo"
 	"github.com/vinllen/mgo/bson"
-	"nimo-shake/configure"
-	"strings"
 )
 
 const (

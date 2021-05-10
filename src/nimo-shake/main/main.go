@@ -1,19 +1,19 @@
 package main
 
 import (
+	"encoding/json"
+	"flag"
 	"fmt"
 	"os"
 	"time"
-	"encoding/json"
-	"flag"
 
-	"nimo-shake/configure"
-	"nimo-shake/common"
-	"nimo-shake/run"
+	utils "github.com/alibaba/NimoShake/src/nimo-shake/common"
+	conf "github.com/alibaba/NimoShake/src/nimo-shake/configure"
+	"github.com/alibaba/NimoShake/src/nimo-shake/run"
 
+	"github.com/alibaba/NimoShake/src/nimo-shake/checkpoint"
+	nimo "github.com/gugemichael/nimo4go"
 	LOG "github.com/vinllen/log4go"
-	"github.com/gugemichael/nimo4go"
-	"nimo-shake/checkpoint"
 )
 
 type Exit struct{ Code int }
@@ -160,7 +160,7 @@ func sanitizeOptions() error {
 		conf.Options.TargetDBExist != utils.TargetDBExistRename &&
 		conf.Options.TargetDBExist != utils.TargetDBExistDrop ||
 		conf.Options.TargetType == utils.TargetTypeAliyunDynamoProxy && conf.Options.TargetDBExist != "" &&
-		conf.Options.TargetDBExist != utils.TargetDBExistDrop {
+			conf.Options.TargetDBExist != utils.TargetDBExistDrop {
 		return fmt.Errorf("illegal target.mongodb.exist[%v] when target.type=%v",
 			conf.Options.TargetDBExist, conf.Options.TargetType)
 	}
@@ -191,8 +191,8 @@ func sanitizeOptions() error {
 	}
 
 	if conf.Options.TargetType == utils.TargetTypeAliyunDynamoProxy &&
-			(!conf.Options.IncreaseExecutorUpsert || !conf.Options.IncreaseExecutorInsertOnDupUpdate) {
-		return fmt.Errorf("increase.executor.upsert and increase.executor.insert_on_dup_update should be " +
+		(!conf.Options.IncreaseExecutorUpsert || !conf.Options.IncreaseExecutorInsertOnDupUpdate) {
+		return fmt.Errorf("increase.executor.upsert and increase.executor.insert_on_dup_update should be "+
 			"enable when target type is %v", utils.TargetTypeAliyunDynamoProxy)
 	}
 

@@ -1,18 +1,18 @@
 package checker
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
-	"encoding/json"
 
-	shakeUtils "nimo-shake/common"
-	shakeQps "nimo-shake/qps"
-	"nimo-full-check/configure"
-	"nimo-shake/protocal"
+	conf "github.com/alibaba/NimoShake/src/nimo-full-check/configure"
+	shakeUtils "github.com/alibaba/NimoShake/src/nimo-shake/common"
+	"github.com/alibaba/NimoShake/src/nimo-shake/protocal"
+	shakeQps "github.com/alibaba/NimoShake/src/nimo-shake/qps"
 
+	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	LOG "github.com/vinllen/log4go"
-	"github.com/aws/aws-sdk-go/aws"
 	"github.com/vinllen/mgo/bson"
 )
 
@@ -33,7 +33,7 @@ type DocumentChecker struct {
 	sourceConn         *dynamodb.DynamoDB
 	mongoClient        *shakeUtils.MongoConn
 	fetcherChan        chan *dynamodb.ScanOutput // chan between fetcher and parser
-	parserChan         chan protocal.RawData   // chan between parser and writer
+	parserChan         chan protocal.RawData     // chan between parser and writer
 	converter          protocal.Converter        // converter
 	sampler            *Sample                   // use to sample
 	primaryKeyWithType KeyUnion

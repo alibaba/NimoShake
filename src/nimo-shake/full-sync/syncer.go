@@ -1,27 +1,27 @@
 package full_sync
 
 import (
-	"sync"
-	"time"
 	"fmt"
 	"strings"
+	"sync"
+	"time"
 
-	"nimo-shake/common"
-	"nimo-shake/configure"
-	"nimo-shake/filter"
-	"nimo-shake/writer"
+	utils "github.com/alibaba/NimoShake/src/nimo-shake/common"
+	conf "github.com/alibaba/NimoShake/src/nimo-shake/configure"
+	"github.com/alibaba/NimoShake/src/nimo-shake/filter"
+	"github.com/alibaba/NimoShake/src/nimo-shake/writer"
 
-	LOG "github.com/vinllen/log4go"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"github.com/vinllen/mgo/bson"
-	"github.com/vinllen/mgo"
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/gugemichael/nimo4go"
+	"github.com/aws/aws-sdk-go/service/dynamodb"
+	nimo "github.com/gugemichael/nimo4go"
+	LOG "github.com/vinllen/log4go"
+	"github.com/vinllen/mgo"
+	"github.com/vinllen/mgo/bson"
 )
 
 var (
 	metricNsMapLock sync.Mutex
-	metricNsMap = make(map[string]*utils.CollectionMetric) // namespace map: db.collection -> collection metric
+	metricNsMap     = make(map[string]*utils.CollectionMetric) // namespace map: db.collection -> collection metric
 )
 
 func Start(dynamoSession *dynamodb.DynamoDB, w writer.Writer) {
@@ -228,7 +228,7 @@ func RestAPI() {
 		if ret.TotalCollection == 0 {
 			ret.Progress = "-%"
 		} else {
-			ret.Progress = fmt.Sprintf("%.2f%%", float64(ret.FinishedCollection) / float64(ret.TotalCollection) * 100)
+			ret.Progress = fmt.Sprintf("%.2f%%", float64(ret.FinishedCollection)/float64(ret.TotalCollection)*100)
 		}
 
 		return ret

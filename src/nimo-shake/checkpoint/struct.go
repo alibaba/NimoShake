@@ -1,10 +1,11 @@
 package checkpoint
 
 import (
-	"nimo-shake/filter"
-	"sync"
 	"encoding/json"
 	"fmt"
+	"sync"
+
+	"github.com/alibaba/NimoShake/src/nimo-shake/filter"
 )
 
 const (
