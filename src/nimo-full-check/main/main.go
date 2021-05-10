@@ -5,11 +5,10 @@ import (
 	"os"
 	"time"
 
-	"nimo-full-check/run"
-	"nimo-full-check/configure"
-	"nimo-full-check/common"
-	shakeUtils "nimo-shake/common"
-	shakeFilter "nimo-shake/filter"
+	conf "github.com/alibaba/NimoShake/src/nimo-full-check/configure"
+	"github.com/alibaba/NimoShake/src/nimo-full-check/run"
+	shakeUtils "github.com/alibaba/NimoShake/src/nimo-shake/common"
+	shakeFilter "github.com/alibaba/NimoShake/src/nimo-shake/filter"
 
 	"github.com/jessevdk/go-flags"
 	LOG "github.com/vinllen/log4go"
@@ -24,7 +23,7 @@ func main() {
 	args, err := flags.Parse(&conf.Opts)
 
 	if conf.Opts.Version {
-		fmt.Println(utils.Version)
+		fmt.Println(shakeUtils.Version)
 		os.Exit(0)
 	}
 

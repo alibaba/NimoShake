@@ -1,22 +1,22 @@
 package incr_sync
 
 import (
+	"fmt"
 	"sync"
 	"time"
-	"fmt"
 
-	"nimo-shake/protocal"
-	"nimo-shake/qps"
-	"nimo-shake/configure"
-	"nimo-shake/common"
-	"nimo-shake/checkpoint"
-	"nimo-shake/writer"
+	"github.com/alibaba/NimoShake/src/nimo-shake/checkpoint"
+	utils "github.com/alibaba/NimoShake/src/nimo-shake/common"
+	conf "github.com/alibaba/NimoShake/src/nimo-shake/configure"
+	"github.com/alibaba/NimoShake/src/nimo-shake/protocal"
+	"github.com/alibaba/NimoShake/src/nimo-shake/qps"
+	"github.com/alibaba/NimoShake/src/nimo-shake/writer"
 
-	"github.com/aws/aws-sdk-go/service/dynamodbstreams"
-	LOG "github.com/vinllen/log4go"
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/service/dynamodbstreams"
+	nimo "github.com/gugemichael/nimo4go"
+	LOG "github.com/vinllen/log4go"
 	"github.com/vinllen/mgo/bson"
-	"github.com/gugemichael/nimo4go"
 )
 
 const (

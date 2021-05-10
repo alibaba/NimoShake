@@ -1,17 +1,17 @@
 package run
 
 import (
-	"nimo-shake/full-sync"
-	"nimo-shake/common"
-	"nimo-shake/configure"
-	"nimo-shake/incr-sync"
-	"nimo-shake/checkpoint"
-	"nimo-shake/filter"
-	"nimo-shake/writer"
+	"github.com/alibaba/NimoShake/src/nimo-shake/checkpoint"
+	utils "github.com/alibaba/NimoShake/src/nimo-shake/common"
+	conf "github.com/alibaba/NimoShake/src/nimo-shake/configure"
+	"github.com/alibaba/NimoShake/src/nimo-shake/filter"
+	full_sync "github.com/alibaba/NimoShake/src/nimo-shake/full-sync"
+	incr_sync "github.com/alibaba/NimoShake/src/nimo-shake/incr-sync"
+	"github.com/alibaba/NimoShake/src/nimo-shake/writer"
 
-	LOG "github.com/vinllen/log4go"
 	"github.com/aws/aws-sdk-go/service/dynamodbstreams"
-	"github.com/gugemichael/nimo4go"
+	nimo "github.com/gugemichael/nimo4go"
+	LOG "github.com/vinllen/log4go"
 )
 
 func Start() {
@@ -24,8 +24,8 @@ func Start() {
 	filter.Init(conf.Options.FilterCollectionWhite, conf.Options.FilterCollectionBlack)
 
 	if err := utils.InitSession(conf.Options.SourceAccessKeyID, conf.Options.SourceSecretAccessKey,
-			conf.Options.SourceSessionToken, conf.Options.SourceRegion, conf.Options.SourceSessionMaxRetries,
-			conf.Options.SourceSessionTimeout); err != nil {
+		conf.Options.SourceSessionToken, conf.Options.SourceRegion, conf.Options.SourceSessionMaxRetries,
+		conf.Options.SourceSessionTimeout); err != nil {
 		LOG.Crashf("init global session failed[%v]", err)
 	}
 

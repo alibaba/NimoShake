@@ -2,12 +2,12 @@ package conf
 
 import (
 	"bufio"
-	"strings"
-	"strconv"
 	"fmt"
 	"os"
+	"strconv"
+	"strings"
 
-	"nimo-shake/common"
+	utils "github.com/alibaba/NimoShake/src/nimo-shake/common"
 )
 
 // read the given file and parse the fcv do comparison

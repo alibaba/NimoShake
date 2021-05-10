@@ -1,14 +1,15 @@
 package writer
 
 import (
-	"testing"
 	"fmt"
 	"reflect"
-	"nimo-shake/common"
-	"nimo-shake/configure"
+	"testing"
 
-	"github.com/aws/aws-sdk-go/service/dynamodb"
+	utils "github.com/alibaba/NimoShake/src/nimo-shake/common"
+	conf "github.com/alibaba/NimoShake/src/nimo-shake/configure"
+
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/stretchr/testify/assert"
 	"github.com/vinllen/mgo"
 	"github.com/vinllen/mgo/bson"

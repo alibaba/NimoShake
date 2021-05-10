@@ -1,19 +1,19 @@
 package full_sync
 
 import (
-	"sync"
 	"fmt"
+	"sync"
 	"time"
 
-	"nimo-shake/common"
-	"nimo-shake/configure"
-	"nimo-shake/protocal"
-	"nimo-shake/qps"
-	"nimo-shake/writer"
+	utils "github.com/alibaba/NimoShake/src/nimo-shake/common"
+	conf "github.com/alibaba/NimoShake/src/nimo-shake/configure"
+	"github.com/alibaba/NimoShake/src/nimo-shake/protocal"
+	"github.com/alibaba/NimoShake/src/nimo-shake/qps"
+	"github.com/alibaba/NimoShake/src/nimo-shake/writer"
 
+	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	LOG "github.com/vinllen/log4go"
-	"github.com/aws/aws-sdk-go/aws"
 )
 
 const (

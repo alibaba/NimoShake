@@ -3,13 +3,14 @@ package incr_sync
 import (
 	"time"
 
-	"nimo-shake/checkpoint"
-	"nimo-shake/common"
-	"nimo-shake/configure"
+	"github.com/alibaba/NimoShake/src/nimo-shake/checkpoint"
+	utils "github.com/alibaba/NimoShake/src/nimo-shake/common"
+	conf "github.com/alibaba/NimoShake/src/nimo-shake/configure"
 
-	LOG "github.com/vinllen/log4go"
-	"github.com/aws/aws-sdk-go/service/dynamodbstreams"
 	"fmt"
+
+	"github.com/aws/aws-sdk-go/service/dynamodbstreams"
+	LOG "github.com/vinllen/log4go"
 )
 
 const (
@@ -22,7 +23,7 @@ type Fetcher struct {
 	stream       *dynamodbstreams.Stream
 	shardChan    chan *utils.ShardNode
 	ckptWriter   checkpoint.Writer
-	metric *utils.ReplicationMetric
+	metric       *utils.ReplicationMetric
 }
 
 func NewFetcher(table string, stream *dynamodbstreams.Stream, shardChan chan *utils.ShardNode, ckptWriter checkpoint.Writer, metric *utils.ReplicationMetric) *Fetcher {
@@ -39,7 +40,7 @@ func NewFetcher(table string, stream *dynamodbstreams.Stream, shardChan chan *ut
 		stream:       stream,
 		shardChan:    shardChan,
 		ckptWriter:   ckptWriter,
-		metric: metric,
+		metric:       metric,
 	}
 }
 

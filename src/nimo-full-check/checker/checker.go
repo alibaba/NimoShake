@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"sync"
 
-	shakeUtils "nimo-shake/common"
-	shakeFilter "nimo-shake/filter"
-	"nimo-full-check/configure"
+	conf "github.com/alibaba/NimoShake/src/nimo-full-check/configure"
+	shakeUtils "github.com/alibaba/NimoShake/src/nimo-shake/common"
+	shakeFilter "github.com/alibaba/NimoShake/src/nimo-shake/filter"
 
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	LOG "github.com/vinllen/log4go"

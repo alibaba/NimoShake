@@ -1,11 +1,12 @@
 package checkpoint
 
 import (
-	"testing"
-	"github.com/stretchr/testify/assert"
 	"fmt"
+	"testing"
 
-	"nimo-shake/common"
+	"github.com/stretchr/testify/assert"
+
+	utils "github.com/alibaba/NimoShake/src/nimo-shake/common"
 )
 
 const (
@@ -129,9 +130,9 @@ func TestCheckpointCRUD(t *testing.T) {
 		assert.Equal(t, nil, err, "should be equal")
 
 		cpkt := &Checkpoint{
-			ShardId:  "test_id",
-			FatherId: "test_father",
-			Status:   StatusNotProcess,
+			ShardId:        "test_id",
+			FatherId:       "test_father",
+			Status:         StatusNotProcess,
 			SequenceNumber: "seq-123",
 		}
 
@@ -156,7 +157,7 @@ func TestCheckpointCRUD(t *testing.T) {
 		assert.Equal(t, cpkt.SequenceNumber, "seq-123", "should be equal")
 
 		err = fileWriter.UpdateWithSet("test_id", map[string]interface{}{
-			"Status": StatusInProcessing,
+			"Status":         StatusInProcessing,
 			"SequenceNumber": "seq-456",
 		}, TestCheckpointTable)
 		assert.Equal(t, nil, err, "should be equal")

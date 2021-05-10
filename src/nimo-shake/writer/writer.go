@@ -1,13 +1,13 @@
 package writer
 
 import (
-	"nimo-shake/common"
+	utils "github.com/alibaba/NimoShake/src/nimo-shake/common"
 
-	LOG "github.com/vinllen/log4go"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
+	LOG "github.com/vinllen/log4go"
 )
 
-type Writer interface{
+type Writer interface {
 	// create table
 	CreateTable(tableDescribe *dynamodb.TableDescription) error
 	// pass table description

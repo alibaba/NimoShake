@@ -1,7 +1,7 @@
 package protocal
 
 import (
-	"nimo-shake/common"
+	utils "github.com/alibaba/NimoShake/src/nimo-shake/common"
 
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 )

@@ -3,7 +3,7 @@ package checkpoint
 import (
 	"fmt"
 
-	"nimo-shake/common"
+	utils "github.com/alibaba/NimoShake/src/nimo-shake/common"
 
 	LOG "github.com/vinllen/log4go"
 	"github.com/vinllen/mgo/bson"

@@ -1,16 +1,17 @@
 package run
 
 import (
-	shakeUtils "nimo-shake/common"
-	"nimo-full-check/configure"
-	"nimo-full-check/checker"
+	"github.com/alibaba/NimoShake/src/nimo-full-check/checker"
+
+	conf "github.com/alibaba/NimoShake/src/nimo-full-check/configure"
+	shakeUtils "github.com/alibaba/NimoShake/src/nimo-shake/common"
 
 	LOG "github.com/vinllen/log4go"
 )
 
 func Start() {
 	if err := shakeUtils.InitSession(conf.Opts.SourceAccessKeyID, conf.Opts.SourceSecretAccessKey,
-			conf.Opts.SourceSessionToken, conf.Opts.SourceRegion, 3, 5000); err != nil {
+		conf.Opts.SourceSessionToken, conf.Opts.SourceRegion, 3, 5000); err != nil {
 		LOG.Crashf("init global session failed[%v]", err)
 	}
 
