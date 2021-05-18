@@ -6,6 +6,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/vinllen/mgo/bson"
+	"github.com/vinllen/mongo-go-driver/bson/primitive"
 	LOG "github.com/vinllen/log4go"
 	"strconv"
 )
@@ -181,7 +182,8 @@ func (tc *TypeConverter) convertToDetail(name string, input interface{}) interfa
 		return input.(bool)
 	case "N":
 		v := input.(string)
-		val, err := bson.ParseDecimal128(v)
+		// for new driver, we need to parse the value to mongo-go-driver.bson.decimal128, not mgo.bson.decimal128
+		/* val, err := bson.ParseDecimal128(v)
 		if err != nil {
 			LOG.Error("convert N to decimal128 failed[%v]", err)
 			val2, err := strconv.ParseFloat(v, 64)
@@ -190,6 +192,17 @@ func (tc *TypeConverter) convertToDetail(name string, input interface{}) interfa
 			}
 
 			val, _ = bson.ParseDecimal128(fmt.Sprintf("%v", val2))
+			return val
+		}*/
+		val, err := primitive.ParseDecimal128(v)
+		if err != nil {
+			LOG.Error("convert N to decimal128 failed[%v]", err)
+			val2, err := strconv.ParseFloat(v, 64)
+			if err != nil {
+				LOG.Crashf("convert N to decimal128 and float64 both failed[%v]", err)
+			}
+
+			val, _ = primitive.ParseDecimal128(fmt.Sprintf("%v", val2))
 			return val
 		}
 		return val

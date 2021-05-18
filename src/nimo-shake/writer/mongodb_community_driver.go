@@ -115,6 +115,7 @@ func (mcw *MongoCommunityWriter) WriteBulk(input []interface{}) error {
 	models := make([]mongo.WriteModel, len(input))
 	for i := range models {
 		models[i] = &mongo.InsertOneModel{Document: input[i]}
+		LOG.Debug("WriteBulk: %v", input[i])
 	}
 
 	_, err := mcw.conn.Client.Database(mcw.ns.Database).Collection(mcw.ns.Collection).BulkWrite(nil, models)

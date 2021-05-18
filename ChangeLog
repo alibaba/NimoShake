@@ -1,3 +1,7 @@
+2021-05-18
+	* VERSION: 1.0.12
+	* BUGFIX: parse int value empty.
+
 2021-04-07
 	* VERSION: 1.0.11
 	* IMPROVE: data source support endpoint_url.
