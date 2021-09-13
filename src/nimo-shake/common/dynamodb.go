@@ -117,3 +117,42 @@ func ParsePrimaryAndSortKey(primaryIndexes []*dynamodb.KeySchemaElement, parseMa
 	}
 	return primaryKey, sortKey, nil
 }
+
+
+func FetchAllStreamIntoSingleResult(stream *dynamodbstreams.Stream, dynamoStreams *dynamodbstreams.DynamoDBStreams) (*dynamodbstreams.DescribeStreamOutput, error) {
+	describeResult, err := dynamoStreams.DescribeStream(&dynamodbstreams.DescribeStreamInput{
+		StreamArn: stream.StreamArn,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("describe stream[%v] with table[%v] failed[%v]", stream.StreamArn,
+			stream.TableName, err)
+	}
+	results := make([]*dynamodbstreams.DescribeStreamOutput, 0)
+	results = append(results, describeResult)
+	LastEvaluatedShardId := describeResult.StreamDescription.LastEvaluatedShardId
+	for LastEvaluatedShardId != nil {
+		nextResult, err := dynamoStreams.DescribeStream(&dynamodbstreams.DescribeStreamInput{
+			StreamArn:             stream.StreamArn,
+			ExclusiveStartShardId: LastEvaluatedShardId,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("describe stream[%v] with table[%v] failed[%v]", stream.StreamArn,
+				stream.TableName, err)
+		}
+		LastEvaluatedShardId = nextResult.StreamDescription.LastEvaluatedShardId
+		results = append(results, nextResult)
+		time.Sleep(time.Second * 1)
+	}
+	return MergeDescribeDescription(results...), nil
+}
+
+func MergeDescribeDescription(results ...*dynamodbstreams.DescribeStreamOutput) *dynamodbstreams.DescribeStreamOutput {
+	if len(results) == 0 {
+		return nil
+	}
+	first := results[0]
+	for i := 1; i < len(results); i++ {
+		first.StreamDescription.Shards = append(first.StreamDescription.Shards, results[i].StreamDescription.Shards...)
+	}
+	return first
+}

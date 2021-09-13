@@ -7,10 +7,10 @@ import (
 	"nimo-shake/common"
 	"nimo-shake/filter"
 
-	"github.com/aws/aws-sdk-go/service/dynamodbstreams"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
-	LOG "github.com/vinllen/log4go"
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/service/dynamodb"
+	"github.com/aws/aws-sdk-go/service/dynamodbstreams"
+	LOG "github.com/vinllen/log4go"
 )
 
 // check whether need full sync
@@ -87,9 +87,8 @@ func CheckCkpt(ckptWriter Writer, dynamoStreams *dynamodbstreams.DynamoDBStreams
 
 func CheckSingleStream(stream *dynamodbstreams.Stream, dynamoStreams *dynamodbstreams.DynamoDBStreams,
 	ckptMap map[string]map[string]*Checkpoint) (bool, error) {
-	describeResult, err := dynamoStreams.DescribeStream(&dynamodbstreams.DescribeStreamInput{
-		StreamArn: stream.StreamArn,
-	})
+
+	describeResult, err := utils.FetchAllStreamIntoSingleResult(stream, dynamoStreams)
 	if err != nil {
 		return false, fmt.Errorf("describe stream[%v] with table[%v] failed[%v]", stream.StreamArn,
 			stream.TableName, err)
@@ -123,7 +122,7 @@ func CheckSingleStream(stream *dynamodbstreams.Stream, dynamoStreams *dynamodbst
 				return false, nil
 			}
 		} else if ckpt.Status == StatusInProcessing && *shard.SequenceNumberRange.StartingSequenceNumber > ckpt.SequenceNumber &&
-				ckpt.SequenceNumber != "" {
+			ckpt.SequenceNumber != "" {
 			LOG.Warn("collection[%v] with shard[%v] shard.StartingSequenceNumber[%v] > checkpoint.SequenceNumber[%v]",
 				*stream.TableName, key, *shard.SequenceNumberRange.StartingSequenceNumber, ckpt.SequenceNumber)
 			return false, nil
@@ -223,9 +222,7 @@ func PrepareFullSyncCkpt(ckptManager Writer, dynamoSession *dynamodb.DynamoDB,
 			}
 			LOG.Info("check checkpoint stream with table[%v]", *stream.TableName)
 
-			describeStreamResult, err := dynamoStreams.DescribeStream(&dynamodbstreams.DescribeStreamInput{
-				StreamArn: stream.StreamArn,
-			})
+			describeStreamResult, err := utils.FetchAllStreamIntoSingleResult(stream, dynamoStreams)
 			if err != nil {
 				return nil, fmt.Errorf("describe stream[%v] with table[%v] failed[%v]", stream.StreamArn,
 					stream.TableName, err)
@@ -348,7 +345,7 @@ func fetchSeqNumber(shardIt *string, dynamoStreams *dynamodbstreams.DynamoDBStre
 			return *records.Records[0].Dynamodb.SequenceNumber,
 				records.Records[0].Dynamodb.ApproximateCreationDateTime.String(), nil
 		}
-		time.Sleep(5 * time.Second)
+		//time.Sleep(5 * time.Second)
 
 		shardIt = records.NextShardIterator
 	}

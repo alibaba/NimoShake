@@ -7,9 +7,9 @@ import (
 	"nimo-shake/common"
 	"nimo-shake/configure"
 
-	LOG "github.com/vinllen/log4go"
-	"github.com/aws/aws-sdk-go/service/dynamodbstreams"
 	"fmt"
+	"github.com/aws/aws-sdk-go/service/dynamodbstreams"
+	LOG "github.com/vinllen/log4go"
 )
 
 const (
@@ -22,7 +22,7 @@ type Fetcher struct {
 	stream       *dynamodbstreams.Stream
 	shardChan    chan *utils.ShardNode
 	ckptWriter   checkpoint.Writer
-	metric *utils.ReplicationMetric
+	metric       *utils.ReplicationMetric
 }
 
 func NewFetcher(table string, stream *dynamodbstreams.Stream, shardChan chan *utils.ShardNode, ckptWriter checkpoint.Writer, metric *utils.ReplicationMetric) *Fetcher {
@@ -39,7 +39,7 @@ func NewFetcher(table string, stream *dynamodbstreams.Stream, shardChan chan *ut
 		stream:       stream,
 		shardChan:    shardChan,
 		ckptWriter:   ckptWriter,
-		metric: metric,
+		metric:       metric,
 	}
 }
 
@@ -48,16 +48,13 @@ func (f *Fetcher) Run() {
 	tableEpoch := make(map[string]int) // GlobalFetcherMoreFlag, restore previous epoch
 	for range time.NewTicker(FetcherInterval * time.Second).C {
 		shardList := make([]*utils.ShardNode, 0)
-		// LOG.Debug("fetch table[%v] stream", table)
+		LOG.Info("fetch table[%v] stream", f.table)
 
 		preEpoch, ok := tableEpoch[f.table]
 		if !ok {
 			tableEpoch[f.table] = 0
 		}
-
-		desStream, err := f.dynamoClient.DescribeStream(&dynamodbstreams.DescribeStreamInput{
-			StreamArn: f.stream.StreamArn,
-		})
+		desStream, err := utils.FetchAllStreamIntoSingleResult(f.stream, f.dynamoClient)
 		if err != nil {
 			LOG.Crashf("describe table[%v] with stream[%v] failed[%v]", f.table, *f.stream.StreamArn, err)
 		}
