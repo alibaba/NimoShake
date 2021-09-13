@@ -303,7 +303,13 @@ func (d *Dispatcher) Run() {
 	}
 
 	d.close = true
-	LOG.Info("%s close", d.String())
+	go func() {
+		<-time.NewTimer(time.Minute * 5).C
+		d.targetWriter.Close()
+		LOG.Info("%s close", d.String())
+	}()
+	LOG.Info("%s close in 5 minutes", d.String())
+
 }
 
 func (d *Dispatcher) getRecords(shardIt string) {
