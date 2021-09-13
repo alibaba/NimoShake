@@ -27,6 +27,7 @@ const (
 	IteratorTypeLatest        = "LATEST"
 	IteratorTypeAtSequence    = "AT_SEQUENCE_NUMBER"
 	IteratorTypeAfterSequence = "AFTER_SEQUENCE_NUMBER"
+	IteratorTypeTrimHorizon   = "TRIM_HORIZON"
 
 	InitShardIt = "see sequence number"
 

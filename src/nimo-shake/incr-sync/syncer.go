@@ -263,6 +263,18 @@ func (d *Dispatcher) Run() {
 				// dynamodb rule: this is only used when restart in 30 minutes
 				shardIt = ckpt.ShardIt
 			}
+		}  else if ckpt.IteratorType == checkpoint.IteratorTypeTrimHorizon {
+			shardItOut, err := d.dynamoStreamSession.GetShardIterator(&dynamodbstreams.GetShardIteratorInput{
+				ShardId: d.shard.Shard.ShardId,
+				ShardIteratorType: aws.String(checkpoint.IteratorTypeTrimHorizon),
+				StreamArn:         aws.String(d.shard.ShardArn),
+			})
+			if err != nil {
+				LOG.Crashf("%s get shard iterator[SequenceNumber:%v, ShardIteratorType:%s, StreamArn:%s] "+
+					"failed[%v]", d.String(), ckpt.SequenceNumber, checkpoint.IteratorTypeAtSequence,
+					d.shard.ShardArn, err)
+			}
+			shardIt = *shardItOut.ShardIterator
 		} else {
 			shardItOut, err := d.dynamoStreamSession.GetShardIterator(&dynamodbstreams.GetShardIteratorInput{
 				ShardId:           d.shard.Shard.ShardId,
