@@ -38,6 +38,7 @@ type Configuration struct {
 	FullEnableIndexUser               bool   `config:"full.enable_index.user"`
 	FullExecutorInsertOnDupUpdate     bool   `config:"full.executor.insert_on_dup_update"`
 	ConvertType                       string `config:"convert.type"`
+	ConvertId                         string `config:"convert._id"`
 	IncreaseConcurrency               uint   `config:"increase.concurrency"`
 	IncreaseExecutorInsertOnDupUpdate bool   `config:"increase.executor.insert_on_dup_update"`
 	IncreaseExecutorUpsert            bool   `config:"increase.executor.upsert"`
@@ -51,3 +52,11 @@ type Configuration struct {
 }
 
 var Options Configuration
+
+func ConvertIdFunc(name string) string {
+	if Options.ConvertId != "" && name == "_id" {
+		return Options.ConvertId + name
+	}
+
+	return name
+}

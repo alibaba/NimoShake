@@ -1,21 +1,21 @@
 package main
 
 import (
-	"fmt"
-	"os"
-	"time"
 	"encoding/json"
 	"flag"
-	"syscall"
+	"fmt"
 	_ "net/http/pprof"
+	"os"
+	"syscall"
+	"time"
 
-	"nimo-shake/configure"
-	"nimo-shake/common"
-	"nimo-shake/run"
 	"nimo-shake/checkpoint"
+	"nimo-shake/common"
+	"nimo-shake/configure"
+	"nimo-shake/run"
 
-	LOG "github.com/vinllen/log4go"
 	"github.com/gugemichael/nimo4go"
+	LOG "github.com/vinllen/log4go"
 )
 
 type Exit struct{ Code int }

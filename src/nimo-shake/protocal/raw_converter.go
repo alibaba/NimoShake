@@ -1,12 +1,13 @@
 package protocal
 
 import (
-	"reflect"
 	"fmt"
+	conf "nimo-shake/configure"
+	"reflect"
 
 	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"github.com/vinllen/mgo/bson"
 	LOG "github.com/vinllen/log4go"
+	"github.com/vinllen/mgo/bson"
 )
 
 type RawConverter struct {
@@ -74,6 +75,7 @@ func (rc *RawConverter) dfs(v reflect.Value) interface{} {
 		ret := make(bson.M)
 		for _, key := range v.MapKeys() {
 			name := key.String()
+			name = conf.ConvertIdFunc(name)
 			if out := rc.dfs(v.MapIndex(key)); out != nil {
 				md := out.(RawData)
 				size += md.Size

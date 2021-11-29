@@ -1,17 +1,17 @@
 package writer
 
 import (
-	"nimo-shake/common"
 	"fmt"
+	"nimo-shake/common"
 
-	LOG "github.com/vinllen/log4go"
+	"context"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
+	LOG "github.com/vinllen/log4go"
+	bson2 "github.com/vinllen/mongo-go-driver/bson"
+	"github.com/vinllen/mongo-go-driver/mongo"
+	"github.com/vinllen/mongo-go-driver/mongo/options"
 	"nimo-shake/configure"
 	"strings"
-	"context"
-	"github.com/vinllen/mongo-go-driver/mongo"
-	bson2 "github.com/vinllen/mongo-go-driver/bson"
-	"github.com/vinllen/mongo-go-driver/mongo/options"
 )
 
 const (
@@ -307,10 +307,11 @@ func (mcw *MongoCommunityWriter) createSingleIndex(primaryIndexes []*dynamodb.Ke
 	}
 
 	primaryKeyWithType := mcw.fetchKey(primaryKey, parseMap[primaryKey])
+	primaryKeyWithType = conf.ConvertIdFunc(primaryKeyWithType)
 	indexList := make([]string, 0, 2)
 	indexList = append(indexList, primaryKeyWithType)
 	if sortKey != "" {
-		indexList = append(indexList, mcw.fetchKey(sortKey, parseMap[sortKey]))
+		indexList = append(indexList, conf.ConvertIdFunc(mcw.fetchKey(sortKey, parseMap[sortKey])))
 	}
 
 	LOG.Info("ns[%s] single index[%v] list[%v]", mcw.ns, primaryKeyWithType, indexList)

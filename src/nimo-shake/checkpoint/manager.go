@@ -7,14 +7,15 @@ import (
 	"nimo-shake/common"
 	"nimo-shake/filter"
 
-	"github.com/aws/aws-sdk-go/service/dynamodbstreams"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
-	LOG "github.com/vinllen/log4go"
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/service/dynamodb"
+	"github.com/aws/aws-sdk-go/service/dynamodbstreams"
+	LOG "github.com/vinllen/log4go"
 )
 
 // check whether need full sync
-func CheckCkpt(ckptWriter Writer, dynamoStreams *dynamodbstreams.DynamoDBStreams) (bool, map[string]*dynamodbstreams.Stream, error) {
+func CheckCkpt(ckptWriter Writer,
+	dynamoStreams *dynamodbstreams.DynamoDBStreams) (bool, map[string]*dynamodbstreams.Stream, error) {
 	// fetch target checkpoint status table
 	status, err := ckptWriter.FindStatus()
 	if err != nil {

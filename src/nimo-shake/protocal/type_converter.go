@@ -1,13 +1,14 @@
 package protocal
 
 import (
-	"reflect"
 	"fmt"
+	conf "nimo-shake/configure"
+	"reflect"
 
 	"github.com/aws/aws-sdk-go/service/dynamodb"
+	LOG "github.com/vinllen/log4go"
 	"github.com/vinllen/mgo/bson"
 	"github.com/vinllen/mongo-go-driver/bson/primitive"
-	LOG "github.com/vinllen/log4go"
 	"strconv"
 )
 
@@ -82,6 +83,7 @@ func (tc *TypeConverter) dfs(v reflect.Value) interface{} {
 		ret := make(bson.M)
 		for _, key := range v.MapKeys() {
 			name := key.String()
+			name = conf.ConvertIdFunc(name)
 			if out := tc.dfs(v.MapIndex(key)); out != nil {
 				md := out.(RawData)
 				size += md.Size
