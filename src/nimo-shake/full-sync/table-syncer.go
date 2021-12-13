@@ -1,8 +1,10 @@
 package full_sync
 
 import (
-	"sync"
 	"fmt"
+	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/aws/aws-sdk-go/aws/request"
+	"sync"
 	"time"
 
 	"nimo-shake/common"
@@ -11,9 +13,9 @@ import (
 	"nimo-shake/qps"
 	"nimo-shake/writer"
 
+	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	LOG "github.com/vinllen/log4go"
-	"github.com/aws/aws-sdk-go/aws"
 )
 
 const (
@@ -170,7 +172,27 @@ func (ts *tableSyncer) fetcher() {
 				})
 				if err != nil {
 					// TODO check network error and retry
-					LOG.Crashf("%s fetcher scan failed[%v]", ts.String(), err)
+					if aerr, ok := err.(awserr.Error); ok {
+
+						switch aerr.Code() {
+						case dynamodb.ErrCodeProvisionedThroughputExceededException:
+							LOG.Warn("%s fetcher reader[%v] recv ProvisionedThroughputExceededException continue",
+								ts.String(), segmentId)
+							time.Sleep(5 * time.Second)
+							continue
+
+						case request.ErrCodeSerialization:
+							LOG.Warn("%s fetcher reader[%v] recv SerializationError[%v] continue",
+								ts.String(), segmentId, err)
+							time.Sleep(5 * time.Second)
+							continue
+
+						default:
+							LOG.Crashf("%s fetcher scan failed[%v] errcode[%v]", ts.String(), err, aerr.Code())
+						}
+					} else {
+						LOG.Crashf("%s fetcher scan failed[%v]", ts.String(), err)
+					}
 				}
 
 				// LOG.Info(*out.Count)

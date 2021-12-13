@@ -2,13 +2,12 @@ package protocal
 
 import (
 	"fmt"
-	conf "nimo-shake/configure"
-	"reflect"
-
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	LOG "github.com/vinllen/log4go"
-	"github.com/vinllen/mgo/bson"
+	bson2 "github.com/vinllen/mongo-go-driver/bson"
 	"github.com/vinllen/mongo-go-driver/bson/primitive"
+	conf "nimo-shake/configure"
+	"reflect"
 	"strconv"
 )
 
@@ -22,7 +21,7 @@ func (tc *TypeConverter) Run(input map[string]*dynamodb.AttributeValue) (interfa
 		return RawData{}, fmt.Errorf("parse failed, return nil")
 	} else if out, ok := output.(RawData); !ok {
 		return RawData{}, fmt.Errorf("parse failed, return type isn't RawData")
-	} else if _, ok := out.Data.(bson.M); !ok {
+	} else if _, ok := out.Data.(bson2.M); !ok {
 		return RawData{}, fmt.Errorf("parse failed, return data isn't bson.M")
 	} else {
 		return out, nil
@@ -80,7 +79,7 @@ func (tc *TypeConverter) dfs(v reflect.Value) interface{} {
 		}
 
 		size := 0
-		ret := make(bson.M)
+		ret := make(bson2.M)
 		for _, key := range v.MapKeys() {
 			name := key.String()
 			name = conf.ConvertIdFunc(name)
@@ -157,10 +156,10 @@ func (tc *TypeConverter) convertToDetail(name string, input interface{}) interfa
 		return output
 	case "NS":
 		list := input.([]interface{})
-		output := make([]bson.Decimal128, 0, len(list))
+		output := make([]primitive.Decimal128, 0, len(list))
 		for _, ele := range list {
 			inner := tc.convertToDetail("N", ele)
-			output = append(output, inner.(bson.Decimal128))
+			output = append(output, inner.(primitive.Decimal128))
 		}
 		return output
 	case "SS":
@@ -185,17 +184,23 @@ func (tc *TypeConverter) convertToDetail(name string, input interface{}) interfa
 	case "N":
 		v := input.(string)
 		// for new driver, we need to parse the value to mongo-go-driver.bson.decimal128, not mgo.bson.decimal128
-		/* val, err := bson.ParseDecimal128(v)
-		if err != nil {
-			LOG.Error("convert N to decimal128 failed[%v]", err)
-			val2, err := strconv.ParseFloat(v, 64)
-			if err != nil {
-				LOG.Crashf("convert N to decimal128 and float64 both failed[%v]", err)
-			}
+		//val, err := bson.ParseDecimal128(v)
+		//if err != nil {
+		//	LOG.Error("convert N to decimal128 failed[%v]", err)
+		//	val2, err := strconv.ParseFloat(v, 64)
+		//	if err != nil {
+		//		LOG.Crashf("convert N to decimal128 and float64 both failed[%v]", err)
+		//	}
+		//
+		//	val, _ = bson.ParseDecimal128(fmt.Sprintf("%v", val2))
+		//	return val
+		//}
 
-			val, _ = bson.ParseDecimal128(fmt.Sprintf("%v", val2))
-			return val
-		}*/
+		val_int, err := strconv.Atoi(v)
+		if err == nil {
+			return val_int
+		}
+
 		val, err := primitive.ParseDecimal128(v)
 		if err != nil {
 			LOG.Error("convert N to decimal128 failed[%v]", err)

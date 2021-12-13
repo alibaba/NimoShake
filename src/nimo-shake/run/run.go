@@ -1,17 +1,17 @@
 package run
 
 import (
-	"nimo-shake/full-sync"
+	"nimo-shake/checkpoint"
 	"nimo-shake/common"
 	"nimo-shake/configure"
-	"nimo-shake/incr-sync"
-	"nimo-shake/checkpoint"
 	"nimo-shake/filter"
+	"nimo-shake/full-sync"
+	"nimo-shake/incr-sync"
 	"nimo-shake/writer"
 
-	LOG "github.com/vinllen/log4go"
 	"github.com/aws/aws-sdk-go/service/dynamodbstreams"
 	"github.com/gugemichael/nimo4go"
+	LOG "github.com/vinllen/log4go"
 )
 
 func Start() {
@@ -30,9 +30,11 @@ func Start() {
 	}
 
 	// check writer connection
-	w := writer.NewWriter(conf.Options.TargetType, conf.Options.TargetAddress, utils.NS{"nimo-shake", "shake_writer_test"}, conf.Options.LogLevel)
+	w := writer.NewWriter(conf.Options.TargetType, conf.Options.TargetAddress,
+		utils.NS{"nimo-shake", "shake_writer_test"}, conf.Options.LogLevel)
 	if w == nil {
-		LOG.Crashf("connect type[%v] address[%v] failed[%v]", conf.Options.TargetType, conf.Options.TargetAddress)
+		LOG.Crashf("connect type[%v] address[%v] failed[%v]",
+			conf.Options.TargetType, conf.Options.TargetAddress)
 	}
 
 	// create dynamo session
