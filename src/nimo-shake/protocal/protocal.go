@@ -18,6 +18,8 @@ func NewConverter(tp string) Converter {
 		return new(RawConverter)
 	case utils.ConvertTypeChange:
 		return new(TypeConverter)
+	case utils.ConvertMTypeChange:
+		return new(MTypeConverter)
 	case utils.ConvertTypeSame:
 		return new(SameConverter)
 	default:

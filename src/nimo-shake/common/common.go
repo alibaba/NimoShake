@@ -1,8 +1,8 @@
 package utils
 
 import (
-	"os"
 	"fmt"
+	"os"
 	"strings"
 
 	LOG "github.com/vinllen/log4go"
@@ -13,6 +13,7 @@ const (
 
 	ConvertTypeRaw    = "raw"
 	ConvertTypeChange = "change"
+	ConvertMTypeChange = "mchange"
 	ConvertTypeSame   = "same" // used in dynamodb -> dynamo-proxy
 
 	SyncModeAll  = "all"
