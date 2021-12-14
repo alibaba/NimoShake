@@ -74,6 +74,8 @@ func (tc *TypeConverter) dfs(v reflect.Value) interface{} {
 		}
 		return RawData{size, ret}
 	case reflect.Map:
+		//TODO(zhangst) MapKeys()没有必要执行两次
+
 		if len(v.MapKeys()) == 0 {
 			return nil
 		}
@@ -156,12 +158,33 @@ func (tc *TypeConverter) convertToDetail(name string, input interface{}) interfa
 		return output
 	case "NS":
 		list := input.([]interface{})
-		output := make([]primitive.Decimal128, 0, len(list))
+
+		var nType reflect.Type
 		for _, ele := range list {
 			inner := tc.convertToDetail("N", ele)
-			output = append(output, inner.(primitive.Decimal128))
+			nType = reflect.TypeOf(inner)
+			break
 		}
-		return output
+
+		if nType.Name() == "int" {
+
+			output := make([]int, 0, len(list))
+			for _, ele := range list {
+				inner := tc.convertToDetail("N", ele)
+				output = append(output, inner.(int))
+			}
+
+			return output
+		} else {
+			output := make([]primitive.Decimal128, 0, len(list))
+			for _, ele := range list {
+				inner := tc.convertToDetail("N", ele)
+				output = append(output, inner.(primitive.Decimal128))
+			}
+
+			return output
+		}
+
 	case "SS":
 		list := input.([]interface{})
 		output := make([]string, 0, len(list))
