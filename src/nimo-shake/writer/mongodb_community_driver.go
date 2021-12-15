@@ -375,6 +375,8 @@ func (mcw *MongoCommunityWriter) fetchKey(key, tp string) string {
 	switch conf.Options.ConvertType {
 	case utils.ConvertTypeChange:
 		fallthrough
+	case utils.ConvertMTypeChange:
+		fallthrough
 	case utils.ConvertTypeSame:
 		return key
 	case utils.ConvertTypeRaw:

@@ -19,8 +19,8 @@ import (
 )
 
 const (
-	fetcherChanSize = 512
-	parserChanSize  = 4096
+	fetcherChanSize = 1024
+	parserChanSize  = 81920
 )
 
 type tableSyncer struct {
@@ -163,6 +163,7 @@ func (ts *tableSyncer) fetcher() {
 			for {
 				<-qos.Bucket
 
+				startT := time.Now()
 				out, err := ts.sourceConn.Scan(&dynamodb.ScanInput{
 					TableName:         aws.String(ts.ns.Collection),
 					TotalSegments:     aws.Int64(int64(conf.Options.FullReadConcurrency)),
@@ -194,11 +195,18 @@ func (ts *tableSyncer) fetcher() {
 						LOG.Crashf("%s fetcher scan failed[%v]", ts.String(), err)
 					}
 				}
+				scanDuration := time.Since(startT)
 
 				// LOG.Info(*out.Count)
 
 				// pass result to parser
+				startT = time.Now()
 				ts.fetcherChan <- out
+				writeFetcherChan := time.Since(startT)
+
+				LOG.Info("%s fetcher reader[%v] ts.fetcherChan.len[%v] " +
+					"scanTime[%v] scanCount[%v] writeFetcherChanTime[%v]",
+					ts.String(), segmentId, len(ts.fetcherChan), scanDuration, *out.Count, writeFetcherChan)
 
 				previousKey = out.LastEvaluatedKey
 				if previousKey == nil {
@@ -219,22 +227,36 @@ func (ts *tableSyncer) parser(id int) {
 	LOG.Info("%s start parser[%v]", ts.String(), id)
 
 	for {
+		startT := time.Now()
 		data, ok := <-ts.fetcherChan
 		if !ok {
 			break
 		}
+		readFetcherChanDuration := time.Since(startT)
 
 		LOG.Debug("%s parser[%v] read data[%v]", ts.String(), id, data)
 
+		var parserDuration, writeParseChanDuration time.Duration = 0,0
+
 		list := data.Items
 		for _, ele := range list {
+			startT = time.Now()
 			out, err := ts.converter.Run(ele)
+			parserDuration = parserDuration + time.Since(startT)
 			if err != nil {
 				LOG.Crashf("%s parser[%v] parse ele[%v] failed[%v]", ts.String(), id, ele, err)
 			}
 
+
+			startT = time.Now()
 			ts.parserChan <- out
+			writeParseChanDuration = writeParseChanDuration + time.Since(startT)
 		}
+
+		LOG.Info("%s parser parser[%v] readFetcherChanTime[%v] parserTime[%v]" +
+			" writeParseChantime[%v] parserChan.len[%v]",
+			ts.String(), id, readFetcherChanDuration, parserDuration, writeParseChanDuration, len(ts.parserChan))
+
 	}
 	LOG.Info("%s close parser", ts.String())
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	_ "net/http/pprof"
 	"os"
+	"runtime"
 	"syscall"
 	"time"
 
@@ -22,6 +23,14 @@ type Exit struct{ Code int }
 
 func main() {
 	defer LOG.Close()
+
+	//http.DefaultServeMux.Handle("/debug/fgprof", fgprof.Handler())
+	//go func() {
+	//	http.ListenAndServe(":6060", nil)
+	//}()
+
+	runtime.GOMAXPROCS(256)
+	fmt.Println("max process:", runtime.GOMAXPROCS(0))
 
 	var err error
 	// argument options
@@ -163,9 +172,11 @@ func sanitizeOptions() error {
 	conf.Options.FullEnableIndexPrimary = true
 
 	if conf.Options.ConvertType == "" {
-		conf.Options.ConvertType = utils.ConvertTypeChange
+		conf.Options.ConvertType = utils.ConvertMTypeChange
 	}
-	if conf.Options.ConvertType != utils.ConvertTypeRaw && conf.Options.ConvertType != utils.ConvertTypeChange {
+	if conf.Options.ConvertType != utils.ConvertTypeRaw &&
+		conf.Options.ConvertType != utils.ConvertTypeChange &&
+		conf.Options.ConvertType != utils.ConvertMTypeChange {
 		return fmt.Errorf("convert.type[%v] illegal", conf.Options.ConvertType)
 	}
 

@@ -1,18 +1,18 @@
 package checker
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
-	"encoding/json"
 
-	shakeUtils "nimo-shake/common"
-	shakeQps "nimo-shake/qps"
 	"nimo-full-check/configure"
+	shakeUtils "nimo-shake/common"
 	"nimo-shake/protocal"
+	shakeQps "nimo-shake/qps"
 
+	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	LOG "github.com/vinllen/log4go"
-	"github.com/aws/aws-sdk-go/aws"
 	"github.com/vinllen/mgo/bson"
 )
 
@@ -181,7 +181,8 @@ func (dc *DocumentChecker) executor() {
 			if conf.Opts.ConvertType == shakeUtils.ConvertTypeRaw {
 				query[dc.primaryKeyWithType.union] = data.Data.(bson.M)[dc.primaryKeyWithType.name].(bson.M)[dc.primaryKeyWithType.tp]
 				query[dc.sortKeyWithType.union] = data.Data.(bson.M)[dc.sortKeyWithType.name].(bson.M)[dc.sortKeyWithType.tp]
-			} else if conf.Opts.ConvertType == shakeUtils.ConvertTypeChange {
+			} else if conf.Opts.ConvertType == shakeUtils.ConvertTypeChange ||
+				conf.Opts.ConvertType == shakeUtils.ConvertMTypeChange {
 				query[dc.primaryKeyWithType.name] = data.Data.(bson.M)[dc.primaryKeyWithType.name]
 				query[dc.sortKeyWithType.name] = data.Data.(bson.M)[dc.sortKeyWithType.name]
 			} else {

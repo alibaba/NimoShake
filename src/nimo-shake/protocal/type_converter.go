@@ -9,6 +9,7 @@ import (
 	conf "nimo-shake/configure"
 	"reflect"
 	"strconv"
+	"time"
 )
 
 type TypeConverter struct {
@@ -29,6 +30,11 @@ func (tc *TypeConverter) Run(input map[string]*dynamodb.AttributeValue) (interfa
 }
 
 func (tc *TypeConverter) dfs(v reflect.Value) interface{} {
+
+	funcStartT := time.Now()
+	defer LOG.Debug("dfs_func kind[%v] value[%v] duration[%v]",
+		v.Kind().String(), v, time.Since(funcStartT))
+
 	switch v.Kind() {
 	case reflect.Invalid:
 		return nil
@@ -74,8 +80,6 @@ func (tc *TypeConverter) dfs(v reflect.Value) interface{} {
 		}
 		return RawData{size, ret}
 	case reflect.Map:
-		//TODO(zhangst) MapKeys()没有必要执行两次
-
 		if len(v.MapKeys()) == 0 {
 			return nil
 		}
@@ -140,6 +144,10 @@ func (tc *TypeConverter) dfs(v reflect.Value) interface{} {
 }
 
 func (tc *TypeConverter) convertToDetail(name string, input interface{}) interface{} {
+
+	funcStartT := time.Now()
+	defer LOG.Debug("convertToDetail_func name[%v] input[%v] duration[%v]",  name, input, time.Since(funcStartT))
+
 	switch name {
 	case "B":
 		list := input.([]interface{})
