@@ -43,8 +43,16 @@ func CheckCkpt(ckptWriter Writer,
 	 * incr-sync.
 	 */
 	streamMap := make(map[string]*dynamodbstreams.Stream, len(ckptMap))
+	var lastEvaluateString *string = nil
 	for {
-		streamList, err := dynamoStreams.ListStreams(&dynamodbstreams.ListStreamsInput{})
+		var listStreamInput *dynamodbstreams.ListStreamsInput
+		if lastEvaluateString != nil {
+			listStreamInput = &dynamodbstreams.ListStreamsInput{ExclusiveStartStreamArn:lastEvaluateString}
+		} else {
+			listStreamInput = &dynamodbstreams.ListStreamsInput{}
+		}
+
+		streamList, err := dynamoStreams.ListStreams(listStreamInput)
 		if err != nil {
 			fmt.Errorf("fetch dynamodb stream list failed[%v]", err)
 		}
@@ -74,6 +82,8 @@ func CheckCkpt(ckptWriter Writer,
 		if streamList.LastEvaluatedStreamArn == nil {
 			// end
 			break
+		} else {
+			lastEvaluateString = streamList.LastEvaluatedStreamArn
 		}
 	}
 
@@ -149,11 +159,20 @@ func PrepareFullSyncCkpt(ckptManager Writer, dynamoSession *dynamodb.DynamoDB,
 
 	LOG.Info("traverse current streams")
 	// traverse streams to check whether all streams enabled
+	var lastEvaluateString *string = nil
 	for {
-		streamList, err := dynamoStreams.ListStreams(&dynamodbstreams.ListStreamsInput{})
+		var listStreamInput *dynamodbstreams.ListStreamsInput
+		if lastEvaluateString != nil {
+			listStreamInput = &dynamodbstreams.ListStreamsInput{ExclusiveStartStreamArn:lastEvaluateString}
+		} else {
+			listStreamInput = &dynamodbstreams.ListStreamsInput{}
+		}
+		streamList, err := dynamoStreams.ListStreams(listStreamInput)
 		if err != nil {
 			return nil, fmt.Errorf("fetch dynamodb stream list failed[%v]", err)
 		}
+
+		LOG.Info("PrepareFullSyncCkpt streamList[%v]", streamList)
 
 		for _, stream := range streamList.Streams {
 			LOG.Info("check stream with table[%v]", *stream.TableName)
@@ -179,9 +198,13 @@ func PrepareFullSyncCkpt(ckptManager Writer, dynamoSession *dynamodb.DynamoDB,
 			delete(sourceTableMap, *stream.TableName)
 		}
 
+		LOG.Info("PrepareFullSyncCkpt after traverse current streams")
+
 		if streamList.LastEvaluatedStreamArn == nil {
 			// end
 			break
+		} else {
+			lastEvaluateString = streamList.LastEvaluatedStreamArn
 		}
 	}
 
@@ -211,8 +234,15 @@ func PrepareFullSyncCkpt(ckptManager Writer, dynamoSession *dynamodb.DynamoDB,
 	LOG.Info("traverse all streams: %v", sourceCkptTableMap)
 	streamMap := make(map[string]*dynamodbstreams.Stream)
 	// traverse streams
+	lastEvaluateString = nil
 	for {
-		streamList, err := dynamoStreams.ListStreams(&dynamodbstreams.ListStreamsInput{})
+		var listStreamInput *dynamodbstreams.ListStreamsInput
+		if lastEvaluateString != nil {
+			listStreamInput = &dynamodbstreams.ListStreamsInput{ExclusiveStartStreamArn:lastEvaluateString}
+		} else {
+			listStreamInput = &dynamodbstreams.ListStreamsInput{}
+		}
+		streamList, err := dynamoStreams.ListStreams(listStreamInput)
 		if err != nil {
 			return nil, fmt.Errorf("fetch dynamodb stream list failed[%v]", err)
 		}
@@ -326,6 +356,8 @@ func PrepareFullSyncCkpt(ckptManager Writer, dynamoSession *dynamodb.DynamoDB,
 		if streamList.LastEvaluatedStreamArn == nil {
 			// end
 			break
+		} else {
+			lastEvaluateString = streamList.LastEvaluatedStreamArn
 		}
 	}
 
