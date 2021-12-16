@@ -1,22 +1,22 @@
 package incr_sync
 
 import (
+	"fmt"
 	"sync"
 	"time"
-	"fmt"
 
+	"nimo-shake/checkpoint"
+	"nimo-shake/common"
+	"nimo-shake/configure"
 	"nimo-shake/protocal"
 	"nimo-shake/qps"
-	"nimo-shake/configure"
-	"nimo-shake/common"
-	"nimo-shake/checkpoint"
 	"nimo-shake/writer"
 
-	"github.com/aws/aws-sdk-go/service/dynamodbstreams"
-	LOG "github.com/vinllen/log4go"
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/vinllen/mgo/bson"
+	"github.com/aws/aws-sdk-go/service/dynamodbstreams"
 	"github.com/gugemichael/nimo4go"
+	LOG "github.com/vinllen/log4go"
+	"github.com/vinllen/mgo/bson"
 )
 
 const (
@@ -142,7 +142,8 @@ type Dispatcher struct {
 	metric                    *utils.ReplicationMetric
 }
 
-func NewDispatcher(id int, shard *utils.ShardNode, ckptWriter checkpoint.Writer, metric *utils.ReplicationMetric) *Dispatcher {
+func NewDispatcher(id int, shard *utils.ShardNode, ckptWriter checkpoint.Writer,
+	metric *utils.ReplicationMetric) *Dispatcher {
 	// create dynamo stream client
 	dynamoStreamSession, err := utils.CreateDynamoStreamSession(conf.Options.LogLevel)
 	if err != nil {
