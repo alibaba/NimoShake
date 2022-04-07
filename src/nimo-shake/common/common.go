@@ -11,10 +11,10 @@ import (
 const (
 	GolangSecurityTime = "2006-01-02T15:04:05Z"
 
-	ConvertTypeRaw    = "raw"
-	ConvertTypeChange = "change"
+	ConvertTypeRaw     = "raw"
+	ConvertTypeChange  = "change"
 	ConvertMTypeChange = "mchange"
-	ConvertTypeSame   = "same" // used in dynamodb -> dynamo-proxy
+	ConvertTypeSame    = "same" // used in dynamodb -> dynamo-proxy
 
 	SyncModeAll  = "all"
 	SyncModeFull = "full"
@@ -34,8 +34,8 @@ const (
 )
 
 var (
-	Version       = "$"
-	StartTime     string
+	Version   = "$"
+	StartTime string
 )
 
 func InitialLogger(logFile string, level string, logBuffer bool) bool {
@@ -51,10 +51,11 @@ func InitialLogger(logFile string, level string, logBuffer bool) bool {
 			LOG.LogBufferLength = 0
 		}
 		fileLogger := LOG.NewFileLogWriter(fmt.Sprintf("logs/%s", logFile), true)
-		fileLogger.SetRotateDaily(true)
+		//fileLogger.SetRotateDaily(true)
+		fileLogger.SetRotateSize(500 * 1024 * 1024)
 		// fileLogger.SetFormat("[%D %T] [%L] [%s] %M")
 		fileLogger.SetFormat("[%D %T] [%L] %M")
-		fileLogger.SetRotateMaxBackup(7)
+		fileLogger.SetRotateMaxBackup(100)
 		LOG.AddFilter("file", logLevel, fileLogger)
 	} else {
 		LOG.AddFilter("console", logLevel, LOG.NewConsoleLogWriter())
