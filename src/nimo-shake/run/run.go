@@ -14,6 +14,26 @@ import (
 	LOG "github.com/vinllen/log4go"
 )
 
+func incrStart(streamMap map[string]*dynamodbstreams.Stream, ckptWriter checkpoint.Writer) {
+	LOG.Info("start increase sync")
+
+	// register restful api
+	incr_sync.RestAPI()
+
+	// start http server.
+	nimo.GoRoutine(func() {
+		// before starting, we must register all interface
+		if err := utils.IncrSyncHttpApi.Listen(); err != nil {
+			LOG.Critical("start incr sync server with port[%v] failed: %v", conf.Options.IncrSyncHTTPListenPort,
+				err)
+		}
+	})
+
+	LOG.Info("------------------------start incr sync------------------------")
+	incr_sync.Start(streamMap, ckptWriter)
+	LOG.Info("------------------------end incr sync------------------------")
+}
+
 func Start() {
 	LOG.Info("check connections")
 
@@ -24,7 +44,7 @@ func Start() {
 	filter.Init(conf.Options.FilterCollectionWhite, conf.Options.FilterCollectionBlack)
 
 	if err := utils.InitSession(conf.Options.SourceAccessKeyID, conf.Options.SourceSecretAccessKey,
-			conf.Options.SourceSessionToken, conf.Options.SourceRegion, conf.Options.SourceEndpointUrl,
+		conf.Options.SourceSessionToken, conf.Options.SourceRegion, conf.Options.SourceEndpointUrl,
 		conf.Options.SourceSessionMaxRetries, conf.Options.SourceSessionTimeout); err != nil {
 		LOG.Crashf("init global session failed[%v]", err)
 	}
@@ -53,14 +73,15 @@ func Start() {
 	ckptWriter := checkpoint.NewWriter(conf.Options.CheckpointType, conf.Options.CheckpointAddress,
 		conf.Options.CheckpointDb)
 
-	LOG.Info("check checkpoint")
 	var skipFull bool
 	var streamMap map[string]*dynamodbstreams.Stream
 	if conf.Options.SyncMode == utils.SyncModeAll {
+		LOG.Info("------------------------check checkpoint------------------------")
 		skipFull, streamMap, err = checkpoint.CheckCkpt(ckptWriter, dynamoStreamSession)
 		if err != nil {
 			LOG.Crashf("check checkpoint failed[%v]", err)
 		}
+		LOG.Info("------------------------end check checkpoint------------------------")
 	}
 
 	// full sync
@@ -78,23 +99,33 @@ func Start() {
 		})
 
 		if conf.Options.SyncMode == utils.SyncModeAll {
-			LOG.Info("drop old checkpoint")
+			LOG.Info("------------------------drop old checkpoint------------------------")
 			if err := ckptWriter.DropAll(); err != nil && err.Error() != utils.NotFountErr {
 				LOG.Crashf("drop checkpoint failed[%v]", err)
 			}
 
-			LOG.Info("prepare checkpoint")
+			LOG.Info("------------------------prepare checkpoint start------------------------")
 			streamMap, err = checkpoint.PrepareFullSyncCkpt(ckptWriter, dynamoSession, dynamoStreamSession)
 			if err != nil {
 				LOG.Crashf("prepare checkpoint failed[%v]", err)
 			}
+			LOG.Info("------------------------prepare checkpoint done------------------------")
 
 			// select{}
 		} else {
 			LOG.Info("sync.mode is 'full', no need to check checkpoint")
 		}
 
-		LOG.Info("start full sync")
+		if conf.Options.IncrSyncParallel == true {
+			go incrStart(streamMap, ckptWriter)
+		}
+
+		// update checkpoint
+		if err := ckptWriter.UpdateStatus(checkpoint.CheckpointStatusValueFullSync); err != nil {
+			LOG.Crashf("set checkpoint to [%v] failed[%v]", checkpoint.CheckpointStatusValueFullSync, err)
+		}
+
+		LOG.Info("------------------------start full sync------------------------")
 		full_sync.Start(dynamoSession, w)
 		LOG.Info("------------------------full sync done!------------------------")
 	}
@@ -113,18 +144,10 @@ func Start() {
 	if err := ckptWriter.UpdateStatus(checkpoint.CheckpointStatusValueIncrSync); err != nil {
 		LOG.Crashf("set checkpoint to [%v] failed[%v]", checkpoint.CheckpointStatusValueIncrSync, err)
 	}
-	LOG.Info("start increase sync")
 
-	// register restful api
-	incr_sync.RestAPI()
+	if conf.Options.IncrSyncParallel == false {
+		go incrStart(streamMap, ckptWriter)
+	}
 
-	// start http server.
-	nimo.GoRoutine(func() {
-		// before starting, we must register all interface
-		if err := utils.IncrSyncHttpApi.Listen(); err != nil {
-			LOG.Critical("start incr sync server with port[%v] failed: %v", conf.Options.IncrSyncHTTPListenPort,
-				err)
-		}
-	})
-	incr_sync.Start(streamMap, ckptWriter)
+	select {}
 }

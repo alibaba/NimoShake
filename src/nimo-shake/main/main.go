@@ -109,6 +109,14 @@ func sanitizeOptions() error {
 		return fmt.Errorf("sync_mode[%v] illegal, should in {all, full}", conf.Options.SyncMode)
 	}
 
+	if conf.Options.IncrSyncParallel != true {
+		conf.Options.IncrSyncParallel = false
+	} else {
+		if conf.Options.SyncMode != utils.SyncModeAll {
+			return fmt.Errorf("sync_mode must be all when incr_sync_parallel is true")
+		}
+	}
+
 	if conf.Options.SourceAccessKeyID == "" {
 		return fmt.Errorf("source.access_key_id shouldn't be empty")
 	}
@@ -193,7 +201,7 @@ func sanitizeOptions() error {
 		conf.Options.TargetDBExist != utils.TargetDBExistRename &&
 		conf.Options.TargetDBExist != utils.TargetDBExistDrop ||
 		conf.Options.TargetType == utils.TargetTypeAliyunDynamoProxy && conf.Options.TargetDBExist != "" &&
-		conf.Options.TargetDBExist != utils.TargetDBExistDrop {
+			conf.Options.TargetDBExist != utils.TargetDBExistDrop {
 		return fmt.Errorf("target.mongodb.exist[%v] should be 'drop' when target.type=%v",
 			conf.Options.TargetDBExist, conf.Options.TargetType)
 	}
@@ -224,8 +232,8 @@ func sanitizeOptions() error {
 	}
 
 	if conf.Options.TargetType == utils.TargetTypeAliyunDynamoProxy &&
-			(!conf.Options.IncreaseExecutorUpsert || !conf.Options.IncreaseExecutorInsertOnDupUpdate) {
-		return fmt.Errorf("increase.executor.upsert and increase.executor.insert_on_dup_update should be " +
+		(!conf.Options.IncreaseExecutorUpsert || !conf.Options.IncreaseExecutorInsertOnDupUpdate) {
+		return fmt.Errorf("increase.executor.upsert and increase.executor.insert_on_dup_update should be "+
 			"enable when target type is %v", utils.TargetTypeAliyunDynamoProxy)
 	}
 

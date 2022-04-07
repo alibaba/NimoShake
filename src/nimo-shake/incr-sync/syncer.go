@@ -26,7 +26,7 @@ const (
 	CheckpointFlushInterval  = 20
 
 	DispatcherBatcherChanSize  = 4096
-	DispatcherExecuterChanSize = 4096
+	DispatcherExecuterChanSize = 4096 * 1000
 
 	IncrBatcherTimeout = 1
 
@@ -486,9 +486,26 @@ func (d *Dispatcher) batcher() {
 }
 
 func (d *Dispatcher) executor() {
+	if conf.Options.SyncMode == utils.SyncModeAll && conf.Options.IncrSyncParallel == true {
+		ckptWriter := checkpoint.NewWriter(conf.Options.CheckpointType, conf.Options.CheckpointAddress,
+			conf.Options.CheckpointDb)
+		for {
+			status, err := ckptWriter.FindStatus()
+
+			if err != nil || status != checkpoint.CheckpointStatusValueIncrSync {
+				LOG.Info("%s wait for full_sync_done[err:%v][status:%s][d.executorChan:%d]",
+					d.String(), err, status, len(d.executorChan))
+				time.Sleep(5 * time.Second)
+			} else {
+				LOG.Info("%s full_sync_done, do incr sync", d.String())
+				break
+			}
+		}
+	}
+
 	for node := range d.executorChan {
-		LOG.Debug("%s try write data with length[%v], tp[%v] approximate[%v]", d.String(), len(node.index),
-			node.tp, node.approximateCreationDateTime)
+		LOG.Info("%s try write data with length[%v], tp[%v] approximate[%v] [d.executorChan:%d]",
+			d.String(), len(node.index), node.tp, node.approximateCreationDateTime, len(d.executorChan))
 		var err error
 		switch node.tp {
 		case EventInsert:

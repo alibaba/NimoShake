@@ -45,6 +45,7 @@ type Configuration struct {
 	CheckpointType                    string `config:"checkpoint.type"`
 	CheckpointAddress                 string `config:"checkpoint.address"`
 	CheckpointDb                      string `config:"checkpoint.db"`
+	IncrSyncParallel                  bool   `config:"incr_sync_parallel"`
 
 	/*---------------------------------------------------------*/
 	// generated variables
