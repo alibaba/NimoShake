@@ -7,9 +7,9 @@ import (
 	"nimo-shake/common"
 	"nimo-shake/configure"
 
-	LOG "github.com/vinllen/log4go"
-	"github.com/aws/aws-sdk-go/service/dynamodbstreams"
 	"fmt"
+	"github.com/aws/aws-sdk-go/service/dynamodbstreams"
+	LOG "github.com/vinllen/log4go"
 )
 
 const (
@@ -22,7 +22,7 @@ type Fetcher struct {
 	stream       *dynamodbstreams.Stream
 	shardChan    chan *utils.ShardNode
 	ckptWriter   checkpoint.Writer
-	metric *utils.ReplicationMetric
+	metric       *utils.ReplicationMetric
 }
 
 func NewFetcher(table string, stream *dynamodbstreams.Stream, shardChan chan *utils.ShardNode, ckptWriter checkpoint.Writer, metric *utils.ReplicationMetric) *Fetcher {
@@ -39,7 +39,7 @@ func NewFetcher(table string, stream *dynamodbstreams.Stream, shardChan chan *ut
 		stream:       stream,
 		shardChan:    shardChan,
 		ckptWriter:   ckptWriter,
-		metric: metric,
+		metric:       metric,
 	}
 }
 
@@ -55,17 +55,42 @@ func (f *Fetcher) Run() {
 			tableEpoch[f.table] = 0
 		}
 
-		desStream, err := f.dynamoClient.DescribeStream(&dynamodbstreams.DescribeStreamInput{
-			StreamArn: f.stream.StreamArn,
-		})
-		if err != nil {
-			LOG.Crashf("describe table[%v] with stream[%v] failed[%v]", f.table, *f.stream.StreamArn, err)
-		}
-		if *desStream.StreamDescription.StreamStatus == "DISABLED" {
-			LOG.Crashf("table[%v] with stream[%v] has already been disabled", f.table, *f.stream.StreamArn)
-		}
+		var allShards []*dynamodbstreams.Shard
+		var lastShardIdString *string = nil
+		for {
+			var describeStreamInput *dynamodbstreams.DescribeStreamInput
+			if lastShardIdString != nil {
+				describeStreamInput = &dynamodbstreams.DescribeStreamInput{
+					StreamArn:             f.stream.StreamArn,
+					ExclusiveStartShardId: lastShardIdString,
+				}
+			} else {
+				describeStreamInput = &dynamodbstreams.DescribeStreamInput{
+					StreamArn: f.stream.StreamArn,
+				}
+			}
 
-		rootNode := utils.BuildShardTree(desStream.StreamDescription.Shards, f.table, *f.stream.StreamArn)
+			desStream, err := f.dynamoClient.DescribeStream(describeStreamInput)
+			if err != nil {
+				LOG.Crashf("describe table[%v] with stream[%v] failed[%v]", f.table, *f.stream.StreamArn, err)
+			}
+			if *desStream.StreamDescription.StreamStatus == "DISABLED" {
+				LOG.Crashf("table[%v] with stream[%v] has already been disabled", f.table, *f.stream.StreamArn)
+			}
+
+			allShards = append(allShards, desStream.StreamDescription.Shards...)
+
+			if desStream.StreamDescription.LastEvaluatedShardId == nil {
+				break
+			} else {
+				lastShardIdString = desStream.StreamDescription.LastEvaluatedShardId
+				LOG.Info("table[%v] have next shardId,LastEvaluatedShardId[%v]",
+					f.table, *desStream.StreamDescription.LastEvaluatedShardId)
+			}
+		}
+		LOG.Info("fetch.Run table[%v] allShards[%v]", f.table, allShards)
+
+		rootNode := utils.BuildShardTree(allShards, f.table, *f.stream.StreamArn)
 		md5 := utils.CalMd5(rootNode)
 
 		GlobalFetcherLock.Lock()

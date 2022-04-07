@@ -47,7 +47,7 @@ func CheckCkpt(ckptWriter Writer,
 	for {
 		var listStreamInput *dynamodbstreams.ListStreamsInput
 		if lastEvaluateString != nil {
-			listStreamInput = &dynamodbstreams.ListStreamsInput{ExclusiveStartStreamArn:lastEvaluateString}
+			listStreamInput = &dynamodbstreams.ListStreamsInput{ExclusiveStartStreamArn: lastEvaluateString}
 		} else {
 			listStreamInput = &dynamodbstreams.ListStreamsInput{}
 		}
@@ -98,17 +98,6 @@ func CheckCkpt(ckptWriter Writer,
 
 func CheckSingleStream(stream *dynamodbstreams.Stream, dynamoStreams *dynamodbstreams.DynamoDBStreams,
 	ckptMap map[string]map[string]*Checkpoint) (bool, error) {
-	describeResult, err := dynamoStreams.DescribeStream(&dynamodbstreams.DescribeStreamInput{
-		StreamArn: stream.StreamArn,
-	})
-	if err != nil {
-		return false, fmt.Errorf("describe stream[%v] with table[%v] failed[%v]", stream.StreamArn,
-			stream.TableName, err)
-	}
-	if *describeResult.StreamDescription.StreamStatus == "DISABLED" {
-		// stream is disabled
-		return false, nil
-	}
 
 	// check table exists on checkpoint map
 	ckptInnerMap, ok := ckptMap[*stream.TableName]
@@ -117,10 +106,43 @@ func CheckSingleStream(stream *dynamodbstreams.Stream, dynamoStreams *dynamodbst
 		return false, nil
 	}
 
-	// convert shard list to map
 	shardMap := make(map[string]*dynamodbstreams.Shard)
-	for _, shard := range describeResult.StreamDescription.Shards {
-		shardMap[*shard.ShardId] = shard
+
+	var lastShardIdString *string = nil
+	for {
+		var describeStreamInput *dynamodbstreams.DescribeStreamInput
+		if lastShardIdString != nil {
+			describeStreamInput = &dynamodbstreams.DescribeStreamInput{
+				StreamArn:             stream.StreamArn,
+				ExclusiveStartShardId: lastShardIdString,
+			}
+		} else {
+			describeStreamInput = &dynamodbstreams.DescribeStreamInput{
+				StreamArn: stream.StreamArn,
+			}
+		}
+		describeResult, err := dynamoStreams.DescribeStream(describeStreamInput)
+		if err != nil {
+			return false, fmt.Errorf("describe stream[%v] with table[%v] failed[%v]", stream.StreamArn,
+				stream.TableName, err)
+		}
+		if *describeResult.StreamDescription.StreamStatus == "DISABLED" {
+			// stream is disabled
+			return false, nil
+		}
+
+		// convert shard list to map
+		for _, shard := range describeResult.StreamDescription.Shards {
+			shardMap[*shard.ShardId] = shard
+		}
+
+		if describeResult.StreamDescription.LastEvaluatedShardId == nil {
+			break
+		} else {
+			lastShardIdString = describeResult.StreamDescription.LastEvaluatedShardId
+			LOG.Info("table[%v] have next shardId,LastEvaluatedShardId[%v]",
+				*stream.TableName, *describeResult.StreamDescription.LastEvaluatedShardId)
+		}
 	}
 
 	LOG.Info("dynamo stream shard map: %v", shardMap)
@@ -134,7 +156,7 @@ func CheckSingleStream(stream *dynamodbstreams.Stream, dynamoStreams *dynamodbst
 				return false, nil
 			}
 		} else if ckpt.Status == StatusInProcessing && *shard.SequenceNumberRange.StartingSequenceNumber > ckpt.SequenceNumber &&
-				ckpt.SequenceNumber != "" {
+			ckpt.SequenceNumber != "" {
 			LOG.Warn("collection[%v] with shard[%v] shard.StartingSequenceNumber[%v] > checkpoint.SequenceNumber[%v]",
 				*stream.TableName, key, *shard.SequenceNumberRange.StartingSequenceNumber, ckpt.SequenceNumber)
 			return false, nil
@@ -163,7 +185,7 @@ func PrepareFullSyncCkpt(ckptManager Writer, dynamoSession *dynamodb.DynamoDB,
 	for {
 		var listStreamInput *dynamodbstreams.ListStreamsInput
 		if lastEvaluateString != nil {
-			listStreamInput = &dynamodbstreams.ListStreamsInput{ExclusiveStartStreamArn:lastEvaluateString}
+			listStreamInput = &dynamodbstreams.ListStreamsInput{ExclusiveStartStreamArn: lastEvaluateString}
 		} else {
 			listStreamInput = &dynamodbstreams.ListStreamsInput{}
 		}
@@ -238,7 +260,7 @@ func PrepareFullSyncCkpt(ckptManager Writer, dynamoSession *dynamodb.DynamoDB,
 	for {
 		var listStreamInput *dynamodbstreams.ListStreamsInput
 		if lastEvaluateString != nil {
-			listStreamInput = &dynamodbstreams.ListStreamsInput{ExclusiveStartStreamArn:lastEvaluateString}
+			listStreamInput = &dynamodbstreams.ListStreamsInput{ExclusiveStartStreamArn: lastEvaluateString}
 		} else {
 			listStreamInput = &dynamodbstreams.ListStreamsInput{}
 		}
@@ -254,20 +276,18 @@ func PrepareFullSyncCkpt(ckptManager Writer, dynamoSession *dynamodb.DynamoDB,
 			}
 			LOG.Info("check checkpoint stream with table[%v]", *stream.TableName)
 
-			describeStreamResult, err := dynamoStreams.DescribeStream(&dynamodbstreams.DescribeStreamInput{
+			preDescribeStreamResult, preErr := dynamoStreams.DescribeStream(&dynamodbstreams.DescribeStreamInput{
 				StreamArn: stream.StreamArn,
 			})
-			if err != nil {
+			if preErr != nil {
 				return nil, fmt.Errorf("describe stream[%v] with table[%v] failed[%v]", stream.StreamArn,
 					stream.TableName, err)
 			}
-
-			if *describeStreamResult.StreamDescription.StreamStatus == "DISABLED" {
+			if *preDescribeStreamResult.StreamDescription.StreamStatus == "DISABLED" {
 				// stream is disabled
 				LOG.Info("stream with table[%v] disabled", *stream.TableName)
 				continue
 			}
-
 			if _, ok := sourceCkptTableMap[*stream.TableName]; !ok {
 				LOG.Info("table[%v] already in checkpoint table", *stream.TableName)
 				continue
@@ -277,9 +297,42 @@ func PrepareFullSyncCkpt(ckptManager Writer, dynamoSession *dynamodb.DynamoDB,
 			// add into steamMap which will be used in incr-sync fetcher
 			streamMap[*stream.TableName] = stream
 
+			var allShards []*dynamodbstreams.Shard
+			var lastShardIdString *string = nil
+			for {
+				var describeStreamInput *dynamodbstreams.DescribeStreamInput
+				if lastShardIdString != nil {
+					describeStreamInput = &dynamodbstreams.DescribeStreamInput{
+						StreamArn:             stream.StreamArn,
+						ExclusiveStartShardId: lastShardIdString,
+					}
+				} else {
+					describeStreamInput = &dynamodbstreams.DescribeStreamInput{
+						StreamArn: stream.StreamArn,
+					}
+				}
+				describeStreamResult, err := dynamoStreams.DescribeStream(describeStreamInput)
+
+				if err != nil {
+					return nil, fmt.Errorf("describe stream[%v] with table[%v] failed[%v]", stream.StreamArn,
+						stream.TableName, err)
+				}
+
+				allShards = append(allShards, describeStreamResult.StreamDescription.Shards...)
+
+				if describeStreamResult.StreamDescription.LastEvaluatedShardId == nil {
+					break
+				} else {
+					lastShardIdString = describeStreamResult.StreamDescription.LastEvaluatedShardId
+					LOG.Info("table[%v] have next shardId,LastEvaluatedShardId[%v]",
+						*stream.TableName, *describeStreamResult.StreamDescription.LastEvaluatedShardId)
+				}
+			}
+			LOG.Info("PrepareFullSyncCkpt table[%v] allShards[%v]", *stream.TableName, allShards)
+
 			// traverse shard
 			LOG.Info("table[%v] doesn't have checkpoint, try to insert", *stream.TableName)
-			rootNode := utils.BuildShardTree(describeStreamResult.StreamDescription.Shards, *stream.TableName,
+			rootNode := utils.BuildShardTree(allShards, *stream.TableName,
 				*stream.StreamArn)
 
 			if tree, err := utils.PrintShardTree(rootNode); err != nil {
@@ -302,6 +355,7 @@ func PrepareFullSyncCkpt(ckptManager Writer, dynamoSession *dynamodb.DynamoDB,
 					IteratorType:   IteratorTypeAtSequence,
 				}
 
+				LOG.Info("TraverseShard ShardId[%c] FatherId[%v] begin", *node.Shard.ShardId, father)
 				if node.Shard.SequenceNumberRange.EndingSequenceNumber != nil {
 					// shard already closed
 					ckpt.Status = StatusNoNeedProcess
@@ -313,7 +367,7 @@ func PrepareFullSyncCkpt(ckptManager Writer, dynamoSession *dynamodb.DynamoDB,
 					outShardIt, err := dynamoStreams.GetShardIterator(&dynamodbstreams.GetShardIteratorInput{
 						ShardId:           node.Shard.ShardId,
 						ShardIteratorType: aws.String(IteratorTypeLatest),
-						StreamArn:         describeStreamResult.StreamDescription.StreamArn,
+						StreamArn:         stream.StreamArn,
 					})
 					if err != nil {
 						return fmt.Errorf("construct shard[%v] iterator failed[%v]", node.Shard.ShardId, err)
@@ -321,6 +375,8 @@ func PrepareFullSyncCkpt(ckptManager Writer, dynamoSession *dynamodb.DynamoDB,
 					// ckpt.ShardIt = *outShardIt.ShardIterator
 					ckpt.ShardIt = InitShardIt
 
+					LOG.Info("TraverseShard noEndsequence ShardId[%c] FatherId[%v] outShardIt[%v]",
+						*node.Shard.ShardId, father, outShardIt)
 					// fetch sequence number based on first record
 					if seq, approximate, err := fetchSeqNumber(outShardIt.ShardIterator, dynamoStreams, node.Table); err != nil {
 						return fmt.Errorf("fetch shard[%v] sequence number failed[%v]", node.Shard.ShardId, err)
@@ -367,21 +423,23 @@ func PrepareFullSyncCkpt(ckptManager Writer, dynamoSession *dynamodb.DynamoDB,
 // fetch first sequence number based on given shardIt
 func fetchSeqNumber(shardIt *string, dynamoStreams *dynamodbstreams.DynamoDBStreams, table string) (string, string, error) {
 	LOG.Info("fetch sequence number of shard[%v] table[%v]", *shardIt, table)
-	// retry 5 times
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 7; i++ {
 		records, err := dynamoStreams.GetRecords(&dynamodbstreams.GetRecordsInput{
 			ShardIterator: shardIt,
 			Limit:         aws.Int64(1),
 		})
 		if err != nil {
-			return "", "", err
+			// TODO fix err( shardIt is nil after GetRecords)
+			LOG.Error("fetch sequence number of table[%v]: err[%v]", table, err)
+			return "", "", nil
 		}
 
 		if len(records.Records) > 0 {
+			LOG.Info("fetch sequence number of shard[%v] table[%v]:found", *shardIt, table)
 			return *records.Records[0].Dynamodb.SequenceNumber,
 				records.Records[0].Dynamodb.ApproximateCreationDateTime.String(), nil
 		}
-		time.Sleep(5 * time.Second)
+		time.Sleep(1 * time.Second)
 
 		shardIt = records.NextShardIterator
 	}
