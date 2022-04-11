@@ -188,6 +188,14 @@ func (ts *tableSyncer) fetcher() {
 							time.Sleep(5 * time.Second)
 							continue
 
+						case request.ErrCodeRequestError, request.CanceledErrorCode,
+							request.ErrCodeResponseTimeout, request.HandlerResponseTimeout,
+							request.WaiterResourceNotReadyErrorCode, request.ErrCodeRead:
+							LOG.Warn("%s fetcher reader[%v] recv Error[%v] continue",
+								ts.String(), segmentId, err)
+							time.Sleep(5 * time.Second)
+							continue
+
 						default:
 							LOG.Crashf("%s fetcher scan failed[%v] errcode[%v]", ts.String(), err, aerr.Code())
 						}
@@ -204,7 +212,7 @@ func (ts *tableSyncer) fetcher() {
 				ts.fetcherChan <- out
 				writeFetcherChan := time.Since(startT)
 
-				LOG.Info("%s fetcher reader[%v] ts.fetcherChan.len[%v] " +
+				LOG.Info("%s fetcher reader[%v] ts.fetcherChan.len[%v] "+
 					"scanTime[%v] scanCount[%v] writeFetcherChanTime[%v]",
 					ts.String(), segmentId, len(ts.fetcherChan), scanDuration, *out.Count, writeFetcherChan)
 
@@ -236,7 +244,7 @@ func (ts *tableSyncer) parser(id int) {
 
 		LOG.Debug("%s parser[%v] read data[%v]", ts.String(), id, data)
 
-		var parserDuration, writeParseChanDuration time.Duration = 0,0
+		var parserDuration, writeParseChanDuration time.Duration = 0, 0
 
 		list := data.Items
 		for _, ele := range list {
@@ -247,13 +255,12 @@ func (ts *tableSyncer) parser(id int) {
 				LOG.Crashf("%s parser[%v] parse ele[%v] failed[%v]", ts.String(), id, ele, err)
 			}
 
-
 			startT = time.Now()
 			ts.parserChan <- out
 			writeParseChanDuration = writeParseChanDuration + time.Since(startT)
 		}
 
-		LOG.Info("%s parser parser[%v] readFetcherChanTime[%v] parserTime[%v]" +
+		LOG.Info("%s parser parser[%v] readFetcherChanTime[%v] parserTime[%v]"+
 			" writeParseChantime[%v] parserChan.len[%v]",
 			ts.String(), id, readFetcherChanDuration, parserDuration, writeParseChanDuration, len(ts.parserChan))
 

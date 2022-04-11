@@ -2,6 +2,9 @@ package incr_sync
 
 import (
 	"fmt"
+	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/aws/aws-sdk-go/aws/request"
+	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"sync"
 	"time"
 
@@ -26,7 +29,7 @@ const (
 	CheckpointFlushInterval  = 20
 
 	DispatcherBatcherChanSize  = 4096
-	DispatcherExecuterChanSize = 4096 * 1000
+	DispatcherExecuterChanSize = 4096 * 15
 
 	IncrBatcherTimeout = 1
 
@@ -322,7 +325,36 @@ func (d *Dispatcher) getRecords(shardIt string) {
 			Limit:         aws.Int64(conf.Options.QpsIncrBatchNum),
 		})
 		if err != nil {
-			LOG.Crashf("%s get records with iterator[%v] failed[%v]", d.String(), *next, err)
+			if aerr, ok := err.(awserr.Error); ok {
+
+				switch aerr.Code() {
+				case dynamodb.ErrCodeProvisionedThroughputExceededException:
+					LOG.Warn("%s getRecords get records with iterator[%v] recv ProvisionedThroughputExceededException continue",
+						d.String(), *next)
+					time.Sleep(5 * time.Second)
+					continue
+
+				case request.ErrCodeSerialization:
+					LOG.Warn("%s getRecords get records with iterator[%v] recv SerializationError[%v] continue",
+						d.String(), *next, err)
+					time.Sleep(5 * time.Second)
+					continue
+
+				case request.ErrCodeRequestError, request.CanceledErrorCode,
+					request.ErrCodeResponseTimeout, request.HandlerResponseTimeout,
+					request.WaiterResourceNotReadyErrorCode, request.ErrCodeRead,
+					dynamodb.ErrCodeInternalServerError:
+					LOG.Warn("%s getRecords get records with iterator[%v] recv Error[%v] continue",
+						d.String(), *next, err)
+					time.Sleep(5 * time.Second)
+					continue
+
+				default:
+					LOG.Crashf("%s getRecords scan failed[%v] errcode[%v]", d.String(), err, aerr.Code())
+				}
+			} else {
+				LOG.Crashf("%s get records with iterator[%v] failed[%v]", d.String(), *next, err)
+			}
 		}
 
 		// LOG.Info("%s bbbb1 %v", d.String(), *next)
