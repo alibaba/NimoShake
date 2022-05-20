@@ -85,6 +85,7 @@ func Start() {
 	}
 
 	// full sync
+	skipIncrSync := false
 	if skipFull == false {
 		// register restful api
 		full_sync.RestAPI()
@@ -117,6 +118,7 @@ func Start() {
 		}
 
 		if conf.Options.IncrSyncParallel == true {
+			skipIncrSync = true
 			go incrStart(streamMap, ckptWriter)
 		}
 
@@ -145,7 +147,7 @@ func Start() {
 		LOG.Crashf("set checkpoint to [%v] failed[%v]", checkpoint.CheckpointStatusValueIncrSync, err)
 	}
 
-	if conf.Options.IncrSyncParallel == false {
+	if skipIncrSync == false {
 		go incrStart(streamMap, ckptWriter)
 	}
 
