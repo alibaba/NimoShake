@@ -20,9 +20,11 @@ runtime.trace
 .DS_Store
 
 data
+nimo-shake-v*
 
 .cache/
 diagnostic/
 *.pid
 src/vendor/*
 !src/vendor/vendor.json
+test_checkpoint_db

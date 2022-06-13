@@ -1,25 +1,36 @@
 package main
 
 import (
-	"fmt"
-	"os"
-	"time"
 	"encoding/json"
 	"flag"
+	"fmt"
+	_ "net/http/pprof"
+	"os"
+	"runtime"
+	"syscall"
+	"time"
 
-	"nimo-shake/configure"
+	"nimo-shake/checkpoint"
 	"nimo-shake/common"
+	"nimo-shake/configure"
 	"nimo-shake/run"
 
-	LOG "github.com/vinllen/log4go"
 	"github.com/gugemichael/nimo4go"
-	"nimo-shake/checkpoint"
+	LOG "github.com/vinllen/log4go"
 )
 
 type Exit struct{ Code int }
 
 func main() {
 	defer LOG.Close()
+
+	//http.DefaultServeMux.Handle("/debug/fgprof", fgprof.Handler())
+	//go func() {
+	//	http.ListenAndServe(":6060", nil)
+	//}()
+
+	runtime.GOMAXPROCS(256)
+	fmt.Println("max process:", runtime.GOMAXPROCS(0))
 
 	var err error
 	// argument options
@@ -79,6 +90,10 @@ func main() {
 	}
 
 	nimo.Profiling(int(conf.Options.SystemProfile))
+	nimo.RegisterSignalForProfiling(syscall.Signal(utils.SIGNALPROFILE)) // syscall.SIGUSR2
+	nimo.RegisterSignalForPrintStack(syscall.Signal(utils.SIGNALSTACK), func(bytes []byte) { // syscall.SIGUSR1
+		LOG.Info(string(bytes))
+	})
 
 	run.Start()
 
@@ -92,6 +107,14 @@ func sanitizeOptions() error {
 
 	if conf.Options.SyncMode != utils.SyncModeAll && conf.Options.SyncMode != utils.SyncModeFull {
 		return fmt.Errorf("sync_mode[%v] illegal, should in {all, full}", conf.Options.SyncMode)
+	}
+
+	if conf.Options.IncrSyncParallel != true {
+		conf.Options.IncrSyncParallel = false
+	} else {
+		if conf.Options.SyncMode != utils.SyncModeAll {
+			return fmt.Errorf("sync_mode must be all when incr_sync_parallel is true")
+		}
 	}
 
 	if conf.Options.SourceAccessKeyID == "" {
@@ -133,6 +156,22 @@ func sanitizeOptions() error {
 		return fmt.Errorf("full.document.concurrency[%v] should in (0, 4096]", conf.Options.FullDocumentConcurrency)
 	}
 
+	if conf.Options.FullDocumentWriteBatch <= 0 {
+		if conf.Options.TargetType == utils.TargetTypeAliyunDynamoProxy {
+			conf.Options.FullDocumentWriteBatch = 25
+		} else {
+			conf.Options.FullDocumentWriteBatch = 128
+		}
+	} else if conf.Options.FullDocumentWriteBatch > 25 && conf.Options.TargetType == utils.TargetTypeAliyunDynamoProxy {
+		conf.Options.FullDocumentWriteBatch = 25
+	}
+
+	if conf.Options.FullReadConcurrency <= 0 {
+		conf.Options.FullReadConcurrency = 1
+	} else if conf.Options.FullReadConcurrency > 8192 {
+		return fmt.Errorf("full.read.concurrency[%v] should in (0, 8192]", conf.Options.FullReadConcurrency)
+	}
+
 	if conf.Options.FullDocumentParser > 4096 || conf.Options.FullDocumentParser == 0 {
 		return fmt.Errorf("full.document.parser[%v] should in (0, 4096]", conf.Options.FullDocumentParser)
 	}
@@ -141,9 +180,11 @@ func sanitizeOptions() error {
 	conf.Options.FullEnableIndexPrimary = true
 
 	if conf.Options.ConvertType == "" {
-		conf.Options.ConvertType = utils.ConvertTypeChange
+		conf.Options.ConvertType = utils.ConvertMTypeChange
 	}
-	if conf.Options.ConvertType != utils.ConvertTypeRaw && conf.Options.ConvertType != utils.ConvertTypeChange {
+	if conf.Options.ConvertType != utils.ConvertTypeRaw &&
+		conf.Options.ConvertType != utils.ConvertTypeChange &&
+		conf.Options.ConvertType != utils.ConvertMTypeChange {
 		return fmt.Errorf("convert.type[%v] illegal", conf.Options.ConvertType)
 	}
 
@@ -160,8 +201,8 @@ func sanitizeOptions() error {
 		conf.Options.TargetDBExist != utils.TargetDBExistRename &&
 		conf.Options.TargetDBExist != utils.TargetDBExistDrop ||
 		conf.Options.TargetType == utils.TargetTypeAliyunDynamoProxy && conf.Options.TargetDBExist != "" &&
-		conf.Options.TargetDBExist != utils.TargetDBExistDrop {
-		return fmt.Errorf("illegal target.mongodb.exist[%v] when target.type=%v",
+			conf.Options.TargetDBExist != utils.TargetDBExistDrop {
+		return fmt.Errorf("target.mongodb.exist[%v] should be 'drop' when target.type=%v",
 			conf.Options.TargetDBExist, conf.Options.TargetType)
 	}
 	// set ConvertType
@@ -191,9 +232,13 @@ func sanitizeOptions() error {
 	}
 
 	if conf.Options.TargetType == utils.TargetTypeAliyunDynamoProxy &&
-			(!conf.Options.IncreaseExecutorUpsert || !conf.Options.IncreaseExecutorInsertOnDupUpdate) {
-		return fmt.Errorf("increase.executor.upsert and increase.executor.insert_on_dup_update should be " +
+		(!conf.Options.IncreaseExecutorUpsert || !conf.Options.IncreaseExecutorInsertOnDupUpdate) {
+		return fmt.Errorf("increase.executor.upsert and increase.executor.insert_on_dup_update should be "+
 			"enable when target type is %v", utils.TargetTypeAliyunDynamoProxy)
+	}
+
+	if conf.Options.SourceEndpointUrl != "" && conf.Options.SyncMode != "full" {
+		return fmt.Errorf("only support sync.mode=full when source.endpoint_url is set")
 	}
 
 	return nil

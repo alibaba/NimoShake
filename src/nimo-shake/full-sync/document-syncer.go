@@ -1,21 +1,20 @@
 package full_sync
 
 import (
-	"time"
 	"fmt"
+	"time"
 
 	"nimo-shake/common"
 	"nimo-shake/configure"
 	"nimo-shake/writer"
 
-	LOG "github.com/vinllen/log4go"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
+	LOG "github.com/vinllen/log4go"
 	"nimo-shake/protocal"
 	"sync/atomic"
 )
 
 const (
-	batchNumber  = 25           // dynamo-proxy limit
 	batchSize    = 2 * utils.MB // mongodb limit: 16MB
 	batchTimeout = 1            // seconds
 )
@@ -69,6 +68,9 @@ func (ds *documentSyncer) Close() {
 }
 
 func (ds *documentSyncer) Run() {
+	batchNumber := int(conf.Options.FullDocumentWriteBatch)
+	LOG.Info("%s start with batchSize[%v]", ds.String(), batchNumber)
+
 	var data interface{}
 	var ok bool
 	batchGroup := make([]interface{}, 0, batchNumber)
@@ -76,6 +78,7 @@ func (ds *documentSyncer) Run() {
 	batchGroupSize := 0
 	exit := false
 	for {
+		StartT := time.Now()
 		select {
 		case data, ok = <-ds.inputChan:
 			if !ok {
@@ -87,6 +90,7 @@ func (ds *documentSyncer) Run() {
 			timeout = true
 			data = nil
 		}
+		readParserChanDuration := time.Since(StartT)
 
 		LOG.Debug("exit[%v], timeout[%v], len(batchGroup)[%v], batchGroupSize[%v], data[%v]", exit, timeout,
 			len(batchGroup), batchGroupSize, data)
@@ -109,6 +113,8 @@ func (ds *documentSyncer) Run() {
 		}
 
 		if exit || timeout || len(batchGroup) >= batchNumber || batchGroupSize >= batchSize {
+			StartT = time.Now()
+			batchGroupLen := len(batchGroup)
 			if len(batchGroup) != 0 {
 				if err := ds.write(batchGroup); err != nil {
 					LOG.Crashf("%s write data failed[%v]", ds.String(), err)
@@ -117,6 +123,9 @@ func (ds *documentSyncer) Run() {
 				batchGroup = make([]interface{}, 0, batchNumber)
 				batchGroupSize = 0
 			}
+			writeDestDBDuration := time.Since(StartT)
+			LOG.Info("%s write db batch[%v] parserChan.len[%v] readParserChanTime[%v] writeDestDbTime[%v]",
+				ds.String(), batchGroupLen, len(ds.inputChan), readParserChanDuration, writeDestDBDuration)
 
 			if exit {
 				break

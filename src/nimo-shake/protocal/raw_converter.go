@@ -1,11 +1,12 @@
 package protocal
 
 import (
-	"reflect"
 	"fmt"
+	bson2 "github.com/vinllen/mongo-go-driver/bson"
+	conf "nimo-shake/configure"
+	"reflect"
 
 	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"github.com/vinllen/mgo/bson"
 	LOG "github.com/vinllen/log4go"
 )
 
@@ -19,7 +20,7 @@ func (rc *RawConverter) Run(input map[string]*dynamodb.AttributeValue) (interfac
 		return RawData{}, fmt.Errorf("parse failed, return nil")
 	} else if out, ok := output.(RawData); !ok {
 		return RawData{}, fmt.Errorf("parse failed, return type isn't RawData")
-	} else if _, ok := out.Data.(bson.M); !ok {
+	} else if _, ok := out.Data.(bson2.M); !ok {
 		return RawData{}, fmt.Errorf("parse failed, return data isn't bson.M")
 	} else {
 		return out, nil
@@ -50,7 +51,7 @@ func (rc *RawConverter) dfs(v reflect.Value) interface{} {
 		}
 
 		size := 0
-		ret := make(bson.M)
+		ret := make(bson2.M)
 		for i := 0; i < v.NumField(); i++ {
 			name := v.Type().Field(i).Name
 			if out := rc.dfs(v.Field(i)); out != nil {
@@ -71,9 +72,10 @@ func (rc *RawConverter) dfs(v reflect.Value) interface{} {
 		}
 
 		size := 0
-		ret := make(bson.M)
+		ret := make(bson2.M)
 		for _, key := range v.MapKeys() {
 			name := key.String()
+			name = conf.ConvertIdFunc(name)
 			if out := rc.dfs(v.MapIndex(key)); out != nil {
 				md := out.(RawData)
 				size += md.Size
@@ -158,7 +160,7 @@ func (rc *RawConverter) convertListToDetailList(name string, input interface{}) 
 	case "L":
 		output := make([]interface{}, 0, len(list))
 		for _, ele := range list {
-			output = append(output, ele.(bson.M))
+			output = append(output, ele.(bson2.M))
 		}
 		return output
 	}

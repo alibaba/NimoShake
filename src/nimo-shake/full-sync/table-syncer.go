@@ -1,8 +1,10 @@
 package full_sync
 
 import (
-	"sync"
 	"fmt"
+	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/aws/aws-sdk-go/aws/request"
+	"sync"
 	"time"
 
 	"nimo-shake/common"
@@ -11,14 +13,14 @@ import (
 	"nimo-shake/qps"
 	"nimo-shake/writer"
 
+	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	LOG "github.com/vinllen/log4go"
-	"github.com/aws/aws-sdk-go/aws"
 )
 
 const (
-	fetcherChanSize = 512
-	parserChanSize  = 4096
+	fetcherChanSize = 1024
+	parserChanSize  = 81920
 )
 
 type tableSyncer struct {
@@ -144,37 +146,86 @@ func (ts *tableSyncer) Close() {
 }
 
 func (ts *tableSyncer) fetcher() {
-	LOG.Info("%s start fetcher", ts.String())
+	LOG.Info("%s start fetcher with %v reader", ts.String(), conf.Options.FullReadConcurrency)
 
 	qos := qps.StartQoS(int(conf.Options.QpsFull))
 	defer qos.Close()
 
-	// init nil
-	var previousKey map[string]*dynamodb.AttributeValue
-	for {
-		<-qos.Bucket
+	var wg sync.WaitGroup
+	wg.Add(int(conf.Options.FullReadConcurrency))
+	for i := 0; i < int(conf.Options.FullReadConcurrency); i++ {
+		go func(segmentId int64) {
+			LOG.Info("%s start reader[%v]", ts.String(), segmentId)
+			defer LOG.Info("%s stop reader[%v]", ts.String(), segmentId)
 
-		out, err := ts.sourceConn.Scan(&dynamodb.ScanInput{
-			TableName:         aws.String(ts.ns.Collection),
-			ExclusiveStartKey: previousKey,
-			Limit:             aws.Int64(conf.Options.QpsFullBatchNum),
-		})
-		if err != nil {
-			// TODO check network error and retry
-			LOG.Crashf("%s fetcher scan failed[%v]", ts.String(), err)
-		}
+			// init nil
+			var previousKey map[string]*dynamodb.AttributeValue
+			for {
+				<-qos.Bucket
 
-		// LOG.Info(*out.Count)
+				startT := time.Now()
+				out, err := ts.sourceConn.Scan(&dynamodb.ScanInput{
+					TableName:         aws.String(ts.ns.Collection),
+					TotalSegments:     aws.Int64(int64(conf.Options.FullReadConcurrency)),
+					Segment:           aws.Int64(segmentId),
+					ExclusiveStartKey: previousKey,
+					Limit:             aws.Int64(conf.Options.QpsFullBatchNum),
+				})
+				if err != nil {
+					// TODO check network error and retry
+					if aerr, ok := err.(awserr.Error); ok {
 
-		// pass result to parser
-		ts.fetcherChan <- out
+						switch aerr.Code() {
+						case dynamodb.ErrCodeProvisionedThroughputExceededException:
+							LOG.Warn("%s fetcher reader[%v] recv ProvisionedThroughputExceededException continue",
+								ts.String(), segmentId)
+							time.Sleep(5 * time.Second)
+							continue
 
-		previousKey = out.LastEvaluatedKey
-		if previousKey == nil {
-			// complete
-			break
-		}
+						case request.ErrCodeSerialization:
+							LOG.Warn("%s fetcher reader[%v] recv SerializationError[%v] continue",
+								ts.String(), segmentId, err)
+							time.Sleep(5 * time.Second)
+							continue
+
+						case request.ErrCodeRequestError, request.CanceledErrorCode,
+							request.ErrCodeResponseTimeout, request.HandlerResponseTimeout,
+							request.WaiterResourceNotReadyErrorCode, request.ErrCodeRead:
+							LOG.Warn("%s fetcher reader[%v] recv Error[%v] continue",
+								ts.String(), segmentId, err)
+							time.Sleep(5 * time.Second)
+							continue
+
+						default:
+							LOG.Crashf("%s fetcher scan failed[%v] errcode[%v]", ts.String(), err, aerr.Code())
+						}
+					} else {
+						LOG.Crashf("%s fetcher scan failed[%v]", ts.String(), err)
+					}
+				}
+				scanDuration := time.Since(startT)
+
+				// LOG.Info(*out.Count)
+
+				// pass result to parser
+				startT = time.Now()
+				ts.fetcherChan <- out
+				writeFetcherChan := time.Since(startT)
+
+				LOG.Info("%s fetcher reader[%v] ts.fetcherChan.len[%v] "+
+					"scanTime[%v] scanCount[%v] writeFetcherChanTime[%v]",
+					ts.String(), segmentId, len(ts.fetcherChan), scanDuration, *out.Count, writeFetcherChan)
+
+				previousKey = out.LastEvaluatedKey
+				if previousKey == nil {
+					// complete
+					break
+				}
+			}
+			wg.Done()
+		}(int64(i))
 	}
+	wg.Wait()
 
 	LOG.Info("%s close fetcher", ts.String())
 	close(ts.fetcherChan)
@@ -184,22 +235,35 @@ func (ts *tableSyncer) parser(id int) {
 	LOG.Info("%s start parser[%v]", ts.String(), id)
 
 	for {
+		startT := time.Now()
 		data, ok := <-ts.fetcherChan
 		if !ok {
 			break
 		}
+		readFetcherChanDuration := time.Since(startT)
 
 		LOG.Debug("%s parser[%v] read data[%v]", ts.String(), id, data)
 
+		var parserDuration, writeParseChanDuration time.Duration = 0, 0
+
 		list := data.Items
 		for _, ele := range list {
+			startT = time.Now()
 			out, err := ts.converter.Run(ele)
+			parserDuration = parserDuration + time.Since(startT)
 			if err != nil {
 				LOG.Crashf("%s parser[%v] parse ele[%v] failed[%v]", ts.String(), id, ele, err)
 			}
 
+			startT = time.Now()
 			ts.parserChan <- out
+			writeParseChanDuration = writeParseChanDuration + time.Since(startT)
 		}
+
+		LOG.Info("%s parser parser[%v] readFetcherChanTime[%v] parserTime[%v]"+
+			" writeParseChantime[%v] parserChan.len[%v]",
+			ts.String(), id, readFetcherChanDuration, parserDuration, writeParseChanDuration, len(ts.parserChan))
+
 	}
 	LOG.Info("%s close parser", ts.String())
 }

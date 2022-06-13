@@ -31,7 +31,8 @@ type Writer interface{
 func NewWriter(name, address string, ns utils.NS, logLevel string) Writer {
 	switch name {
 	case utils.TargetTypeMongo:
-		return NewMongoWriter(name, address, ns)
+		// return NewMongoWriter(name, address, ns)
+		return NewMongoCommunityWriter(name, address, ns)
 	case utils.TargetTypeAliyunDynamoProxy:
 		return NewDynamoProxyWriter(name, address, ns, logLevel)
 	default:

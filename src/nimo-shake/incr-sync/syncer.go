@@ -1,22 +1,25 @@
 package incr_sync
 
 import (
+	"fmt"
+	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/aws/aws-sdk-go/aws/request"
+	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"sync"
 	"time"
-	"fmt"
 
+	"nimo-shake/checkpoint"
+	"nimo-shake/common"
+	"nimo-shake/configure"
 	"nimo-shake/protocal"
 	"nimo-shake/qps"
-	"nimo-shake/configure"
-	"nimo-shake/common"
-	"nimo-shake/checkpoint"
 	"nimo-shake/writer"
 
-	"github.com/aws/aws-sdk-go/service/dynamodbstreams"
-	LOG "github.com/vinllen/log4go"
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/vinllen/mgo/bson"
+	"github.com/aws/aws-sdk-go/service/dynamodbstreams"
 	"github.com/gugemichael/nimo4go"
+	LOG "github.com/vinllen/log4go"
+	"github.com/vinllen/mgo/bson"
 )
 
 const (
@@ -26,7 +29,7 @@ const (
 	CheckpointFlushInterval  = 20
 
 	DispatcherBatcherChanSize  = 4096
-	DispatcherExecuterChanSize = 4096
+	DispatcherExecuterChanSize = 4096 * 15
 
 	IncrBatcherTimeout = 1
 
@@ -142,7 +145,8 @@ type Dispatcher struct {
 	metric                    *utils.ReplicationMetric
 }
 
-func NewDispatcher(id int, shard *utils.ShardNode, ckptWriter checkpoint.Writer, metric *utils.ReplicationMetric) *Dispatcher {
+func NewDispatcher(id int, shard *utils.ShardNode, ckptWriter checkpoint.Writer,
+	metric *utils.ReplicationMetric) *Dispatcher {
 	// create dynamo stream client
 	dynamoStreamSession, err := utils.CreateDynamoStreamSession(conf.Options.LogLevel)
 	if err != nil {
@@ -321,7 +325,36 @@ func (d *Dispatcher) getRecords(shardIt string) {
 			Limit:         aws.Int64(conf.Options.QpsIncrBatchNum),
 		})
 		if err != nil {
-			LOG.Crashf("%s get records with iterator[%v] failed[%v]", d.String(), *next, err)
+			if aerr, ok := err.(awserr.Error); ok {
+
+				switch aerr.Code() {
+				case dynamodb.ErrCodeProvisionedThroughputExceededException:
+					LOG.Warn("%s getRecords get records with iterator[%v] recv ProvisionedThroughputExceededException continue",
+						d.String(), *next)
+					time.Sleep(5 * time.Second)
+					continue
+
+				case request.ErrCodeSerialization:
+					LOG.Warn("%s getRecords get records with iterator[%v] recv SerializationError[%v] continue",
+						d.String(), *next, err)
+					time.Sleep(5 * time.Second)
+					continue
+
+				case request.ErrCodeRequestError, request.CanceledErrorCode,
+					request.ErrCodeResponseTimeout, request.HandlerResponseTimeout,
+					request.WaiterResourceNotReadyErrorCode, request.ErrCodeRead,
+					dynamodb.ErrCodeInternalServerError:
+					LOG.Warn("%s getRecords get records with iterator[%v] recv Error[%v] continue",
+						d.String(), *next, err)
+					time.Sleep(5 * time.Second)
+					continue
+
+				default:
+					LOG.Crashf("%s getRecords scan failed[%v] errcode[%v]", d.String(), err, aerr.Code())
+				}
+			} else {
+				LOG.Crashf("%s get records with iterator[%v] failed[%v]", d.String(), *next, err)
+			}
 		}
 
 		// LOG.Info("%s bbbb1 %v", d.String(), *next)
@@ -434,7 +467,7 @@ func (d *Dispatcher) batcher() {
 			}
 
 			switch d.targetWriter.(type) {
-			case *writer.MongoWriter:
+			case *writer.MongoCommunityWriter:
 				node.operate = append(node.operate, value.(protocal.RawData).Data)
 				node.index = append(node.index, index.(protocal.RawData).Data)
 			case *writer.DynamoProxyWriter:
@@ -450,7 +483,7 @@ func (d *Dispatcher) batcher() {
 			}
 
 			switch d.targetWriter.(type) {
-			case *writer.MongoWriter:
+			case *writer.MongoCommunityWriter:
 				node.operate = append(node.operate, value.(protocal.RawData).Data)
 				node.index = append(node.index, index.(protocal.RawData).Data)
 			case *writer.DynamoProxyWriter:
@@ -461,7 +494,7 @@ func (d *Dispatcher) batcher() {
 			}
 		case EventRemove:
 			switch d.targetWriter.(type) {
-			case *writer.MongoWriter:
+			case *writer.MongoCommunityWriter:
 				node.index = append(node.index, index.(protocal.RawData).Data)
 			case *writer.DynamoProxyWriter:
 				node.index = append(node.index, index)
@@ -485,9 +518,26 @@ func (d *Dispatcher) batcher() {
 }
 
 func (d *Dispatcher) executor() {
+	if conf.Options.SyncMode == utils.SyncModeAll && conf.Options.IncrSyncParallel == true {
+		ckptWriter := checkpoint.NewWriter(conf.Options.CheckpointType, conf.Options.CheckpointAddress,
+			conf.Options.CheckpointDb)
+		for {
+			status, err := ckptWriter.FindStatus()
+
+			if err != nil || status != checkpoint.CheckpointStatusValueIncrSync {
+				LOG.Info("%s wait for full_sync_done[err:%v][status:%s][d.executorChan:%d]",
+					d.String(), err, status, len(d.executorChan))
+				time.Sleep(5 * time.Second)
+			} else {
+				LOG.Info("%s full_sync_done, do incr sync", d.String())
+				break
+			}
+		}
+	}
+
 	for node := range d.executorChan {
-		LOG.Debug("%s try write data with length[%v], tp[%v] approximate[%v]", d.String(), len(node.index),
-			node.tp, node.approximateCreationDateTime)
+		LOG.Info("%s try write data with length[%v], tp[%v] approximate[%v] [d.executorChan:%d]",
+			d.String(), len(node.index), node.tp, node.approximateCreationDateTime, len(d.executorChan))
 		var err error
 		switch node.tp {
 		case EventInsert:

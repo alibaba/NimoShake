@@ -879,7 +879,7 @@ func TestBatcher_Executor(t *testing.T) {
 		fmt.Printf("TestBatcher_Executor case %d.\n", nr)
 		nr++
 
-		utils.InitialLogger("", "info", true)
+		utils.InitialLogger("", "debug", true)
 
 		ckpt := checkpoint.NewWriter(checkpoint.CheckpointWriterTypeFile, "test-ckpt", "test-db")
 		// remove test checkpoint table

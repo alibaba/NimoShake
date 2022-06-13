@@ -1,3 +1,36 @@
+2021-12-07
+	* VERSION: 1.0.13
+	* IMPROVE: deprecated mongo.go.driver
+	* IMPROVE: add convert._id, add a prefix to _id key name from DynamoDB
+	* IMPROVE: add type mchange in convert.type, use function from aws-sdk-go to convert data, better performance
+	* IMPROVE: adapt to LastEvaluatedStreamArn and LastEvaluatedShardId not nil
+	* IMPROVE: add incr_sync_parallel to do parallel full&incr
+
+2021-05-18
+	* VERSION: 1.0.12
+	* BUGFIX: parse int value empty.
+
+2021-04-07
+	* VERSION: 1.0.11
+	* IMPROVE: data source support endpoint_url.
+
+2021-03-02
+	* VERSION: 1.0.10
+	* IMPROVE: replace mgo driver with mongo.go.driver
+
+2021-03-01
+	* VERSION: 1.0.9
+	* IMPROVE: add full.document.write.batch.
+	* IMPROVE: enable MongoDB unordered bulk write.
+	* IMPROVE: create range index instead of hash index when target mongodb
+	type is replcaSet.
+	* BUGFIX: create union index for gsi and lsi.
+
+2021-02-25
+	* VERSION: 1.0.8
+	* IMPROVE: add pprof.
+	* IMPROVE: support parallel scan.
+
 2021-01-28
 	* VERSION: 1.0.7
 	* BUGFIX: some corner cases.

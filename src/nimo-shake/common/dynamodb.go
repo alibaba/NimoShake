@@ -21,7 +21,7 @@ var (
  * Sessions can be shared across all service clients that share the same base configuration
  * refer: https://docs.aws.amazon.com/sdk-for-go/api/aws/session/
  */
-func InitSession(accessKeyID, secretAccessKey, sessionToken, region string, maxRetries, timeout uint) error {
+func InitSession(accessKeyID, secretAccessKey, sessionToken, region, endpoint string, maxRetries, timeout uint) error {
 	config := &aws.Config{
 		Region: aws.String(region),
 		Credentials: credentials.NewStaticCredentials(accessKeyID, secretAccessKey, sessionToken),
@@ -29,6 +29,10 @@ func InitSession(accessKeyID, secretAccessKey, sessionToken, region string, maxR
 		HTTPClient: &http.Client{
 			Timeout: time.Duration(timeout) * time.Millisecond,
 		},
+	}
+
+	if endpoint != "" {
+		config.Endpoint = aws.String(endpoint)
 	}
 
 	var err error

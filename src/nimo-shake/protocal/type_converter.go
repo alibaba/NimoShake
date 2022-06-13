@@ -1,13 +1,15 @@
 package protocal
 
 import (
-	"reflect"
 	"fmt"
-
 	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"github.com/vinllen/mgo/bson"
 	LOG "github.com/vinllen/log4go"
+	bson2 "github.com/vinllen/mongo-go-driver/bson"
+	"github.com/vinllen/mongo-go-driver/bson/primitive"
+	conf "nimo-shake/configure"
+	"reflect"
 	"strconv"
+	"time"
 )
 
 type TypeConverter struct {
@@ -20,7 +22,7 @@ func (tc *TypeConverter) Run(input map[string]*dynamodb.AttributeValue) (interfa
 		return RawData{}, fmt.Errorf("parse failed, return nil")
 	} else if out, ok := output.(RawData); !ok {
 		return RawData{}, fmt.Errorf("parse failed, return type isn't RawData")
-	} else if _, ok := out.Data.(bson.M); !ok {
+	} else if _, ok := out.Data.(bson2.M); !ok {
 		return RawData{}, fmt.Errorf("parse failed, return data isn't bson.M")
 	} else {
 		return out, nil
@@ -28,6 +30,11 @@ func (tc *TypeConverter) Run(input map[string]*dynamodb.AttributeValue) (interfa
 }
 
 func (tc *TypeConverter) dfs(v reflect.Value) interface{} {
+
+	funcStartT := time.Now()
+	defer LOG.Debug("dfs_func kind[%v] value[%v] duration[%v]",
+		v.Kind().String(), v, time.Since(funcStartT))
+
 	switch v.Kind() {
 	case reflect.Invalid:
 		return nil
@@ -78,9 +85,10 @@ func (tc *TypeConverter) dfs(v reflect.Value) interface{} {
 		}
 
 		size := 0
-		ret := make(bson.M)
+		ret := make(bson2.M)
 		for _, key := range v.MapKeys() {
 			name := key.String()
+			name = conf.ConvertIdFunc(name)
 			if out := tc.dfs(v.MapIndex(key)); out != nil {
 				md := out.(RawData)
 				size += md.Size
@@ -136,6 +144,10 @@ func (tc *TypeConverter) dfs(v reflect.Value) interface{} {
 }
 
 func (tc *TypeConverter) convertToDetail(name string, input interface{}) interface{} {
+
+	funcStartT := time.Now()
+	defer LOG.Debug("convertToDetail_func name[%v] input[%v] duration[%v]",  name, input, time.Since(funcStartT))
+
 	switch name {
 	case "B":
 		list := input.([]interface{})
@@ -154,12 +166,33 @@ func (tc *TypeConverter) convertToDetail(name string, input interface{}) interfa
 		return output
 	case "NS":
 		list := input.([]interface{})
-		output := make([]bson.Decimal128, 0, len(list))
+
+		var nType reflect.Type
 		for _, ele := range list {
 			inner := tc.convertToDetail("N", ele)
-			output = append(output, inner.(bson.Decimal128))
+			nType = reflect.TypeOf(inner)
+			break
 		}
-		return output
+
+		if nType.Name() == "int" {
+
+			output := make([]int, 0, len(list))
+			for _, ele := range list {
+				inner := tc.convertToDetail("N", ele)
+				output = append(output, inner.(int))
+			}
+
+			return output
+		} else {
+			output := make([]primitive.Decimal128, 0, len(list))
+			for _, ele := range list {
+				inner := tc.convertToDetail("N", ele)
+				output = append(output, inner.(primitive.Decimal128))
+			}
+
+			return output
+		}
+
 	case "SS":
 		list := input.([]interface{})
 		output := make([]string, 0, len(list))
@@ -181,7 +214,25 @@ func (tc *TypeConverter) convertToDetail(name string, input interface{}) interfa
 		return input.(bool)
 	case "N":
 		v := input.(string)
-		val, err := bson.ParseDecimal128(v)
+		// for new driver, we need to parse the value to mongo-go-driver.bson.decimal128, not mgo.bson.decimal128
+		//val, err := bson.ParseDecimal128(v)
+		//if err != nil {
+		//	LOG.Error("convert N to decimal128 failed[%v]", err)
+		//	val2, err := strconv.ParseFloat(v, 64)
+		//	if err != nil {
+		//		LOG.Crashf("convert N to decimal128 and float64 both failed[%v]", err)
+		//	}
+		//
+		//	val, _ = bson.ParseDecimal128(fmt.Sprintf("%v", val2))
+		//	return val
+		//}
+
+		val_int, err := strconv.Atoi(v)
+		if err == nil {
+			return val_int
+		}
+
+		val, err := primitive.ParseDecimal128(v)
 		if err != nil {
 			LOG.Error("convert N to decimal128 failed[%v]", err)
 			val2, err := strconv.ParseFloat(v, 64)
@@ -189,7 +240,7 @@ func (tc *TypeConverter) convertToDetail(name string, input interface{}) interfa
 				LOG.Crashf("convert N to decimal128 and float64 both failed[%v]", err)
 			}
 
-			val, _ = bson.ParseDecimal128(fmt.Sprintf("%v", val2))
+			val, _ = primitive.ParseDecimal128(fmt.Sprintf("%v", val2))
 			return val
 		}
 		return val
