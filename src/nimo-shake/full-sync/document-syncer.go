@@ -134,6 +134,11 @@ func (ds *documentSyncer) Run() {
 		}
 	}
 
+	go func() {
+		<-time.NewTimer(time.Minute * 5).C
+		ds.writer.Close()
+		LOG.Info("%s full-sync writer close", ds.String())
+	}()
 	LOG.Info("%s finish writing", ds.String())
 }
 
