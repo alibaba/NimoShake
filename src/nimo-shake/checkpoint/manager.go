@@ -27,7 +27,7 @@ func CheckCkpt(ckptWriter Writer,
 		return false, nil, nil
 	}
 
-	// extract checkpoint from mongodb
+	// extract checkpoint from mongodb, map[tableName] = (map[shardId] = checkpoint element)
 	ckptMap, err := ckptWriter.ExtractCheckpoint()
 	if err != nil {
 		LOG.Error("extract checkpoint failed[%v]", err)
@@ -96,6 +96,7 @@ func CheckCkpt(ckptWriter Writer,
 	return true, streamMap, nil
 }
 
+// CheckSingleStream check ckptMap[*stream.TableName] shards sequence number is not expired(deleted)
 func CheckSingleStream(stream *dynamodbstreams.Stream, dynamoStreams *dynamodbstreams.DynamoDBStreams,
 	ckptMap map[string]map[string]*Checkpoint) (bool, error) {
 
@@ -246,7 +247,7 @@ func PrepareFullSyncCkpt(ckptManager Writer, dynamoSession *dynamodb.DynamoDB,
 			}
 		}
 
-		LOG.Info("wait new streams created[%v]...", sourceTableMap)
+		LOG.Info("wait 30 seconds for new streams created[%v]...", sourceTableMap)
 		time.Sleep(30 * time.Second) // wait new stream created
 	}
 

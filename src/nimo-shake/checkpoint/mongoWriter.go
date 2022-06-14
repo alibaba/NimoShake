@@ -31,7 +31,8 @@ func NewMongoWriter(address, db string) *MongoWriter {
 
 func (mw *MongoWriter) FindStatus() (string, error) {
 	var query Status
-	if err := mw.conn.Session.DB(mw.db).C(CheckpointStatusTable).Find(bson.M{"Key": CheckpointStatusKey}).One(&query); err != nil {
+	if err := mw.conn.Session.DB(mw.db).C(CheckpointStatusTable).Find(bson.M{"Key": CheckpointStatusKey}).
+		One(&query); err != nil {
 		if err.Error() == utils.NotFountErr {
 			return CheckpointStatusValueEmpty, nil
 		}
@@ -51,7 +52,7 @@ func (mw *MongoWriter) UpdateStatus(status string) error {
 }
 
 func (mw *MongoWriter) ExtractCheckpoint() (map[string]map[string]*Checkpoint, error) {
-	// extract checkpoint from mongodb
+	// extract checkpoint from mongodb, every collection checkpoint have independent collection(table)
 	ckptMap := make(map[string]map[string]*Checkpoint)
 
 	collectionList, err := mw.conn.Session.DB(mw.db).CollectionNames()
