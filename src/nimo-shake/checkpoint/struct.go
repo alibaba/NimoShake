@@ -1,10 +1,10 @@
 package checkpoint
 
 import (
-	"nimo-shake/filter"
-	"sync"
 	"encoding/json"
 	"fmt"
+	"nimo-shake/filter"
+	"sync"
 )
 
 const (
@@ -27,6 +27,7 @@ const (
 	IteratorTypeLatest        = "LATEST"
 	IteratorTypeAtSequence    = "AT_SEQUENCE_NUMBER"
 	IteratorTypeAfterSequence = "AFTER_SEQUENCE_NUMBER"
+	IteratorTypeTrimHorizon   = "TRIM_HORIZON"
 
 	InitShardIt = "see sequence number"
 
