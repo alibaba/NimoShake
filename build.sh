@@ -15,6 +15,7 @@ branch=$branch","$cid
 
 output=./bin/
 rm -rf ${output}
+mkdir ${output}
 
 # make sure we're in the directory where the script lives
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -46,11 +47,14 @@ for g in "${goos[@]}"; do
     echo "try build goos=$g"
     for i in "${modules[@]}" ; do
         echo "build "$i
+        cd $i
         info="$i/common.Version=$branch"
         info=$info","$goversion
         info=$info","$t
-        $run_builder -ldflags "-X $info" -o "${output}/$i.$g" "./src/$i/main/main.go"
+        $run_builder -ldflags "-X $info" -o "${output}/$i.$g" "./main/main.go"
         echo "build $i successfully!"
+        cd ..
+        cp "$i/${output}/$i.$g" ${output}/
     done
     echo "build goos=$g: all modules successfully!"
 done
