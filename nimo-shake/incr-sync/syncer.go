@@ -318,13 +318,7 @@ func (d *Dispatcher) Run() {
 		LOG.Crashf("%s update checkpoint to done failed[%v]", d.String(), err)
 	}
 
-	d.close = true
-	go func() {
-		<-time.NewTimer(time.Minute * 5).C
-		d.targetWriter.Close()
-		LOG.Info("%s incr sync writer close", d.String())
-	}()
-	LOG.Info("%s close in 5 minutes", d.String())
+	LOG.Info("%s shard fetch done, Run() func exit", d.String())
 }
 
 func (d *Dispatcher) getRecords(shardIt string) {
@@ -578,6 +572,14 @@ func (d *Dispatcher) executor() {
 	}
 
 	LOG.Info("%s executor exit", d.String())
+
+	d.close = true
+	go func() {
+		<-time.NewTimer(time.Minute * 5).C
+		d.targetWriter.Close()
+		LOG.Info("%s incr sync writer close", d.String())
+	}()
+	LOG.Info("%s close in 5 minutes", d.String())
 }
 
 // used to set checkpoint
