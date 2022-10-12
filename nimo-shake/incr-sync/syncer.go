@@ -199,7 +199,7 @@ func (d *Dispatcher) String() string {
 	return fmt.Sprintf("dispatcher[%v] table[%v] shard-id[%v]", d.id, d.ns.Collection, *d.shard.Shard.ShardId)
 }
 
-func (d *Dispatcher) Run() {
+func (d *Dispatcher) waitFatherShardFinished() {
 	// re-check father shard finished
 	var father string
 	if d.shard.Shard.ParentShardId != nil {
@@ -227,6 +227,9 @@ func (d *Dispatcher) Run() {
 	}
 
 	LOG.Info("%s father shard[%v] finished", d.String(), father)
+}
+
+func (d *Dispatcher) Run() {
 
 	// fetch shardIt
 	shardIt, ok := checkpoint.GlobalShardIteratorMap.Get(*d.shard.Shard.ShardId)
@@ -309,14 +312,6 @@ func (d *Dispatcher) Run() {
 	// get records
 	d.getRecords(shardIt)
 	LOG.Info("%s finish shard", d.String())
-
-	// update checkpoint: finish
-	err = d.ckptWriter.UpdateWithSet(*d.shard.Shard.ShardId, map[string]interface{}{
-		checkpoint.FieldStatus: checkpoint.StatusDone,
-	}, d.ns.Collection)
-	if err != nil {
-		LOG.Crashf("%s update checkpoint to done failed[%v]", d.String(), err)
-	}
 
 	LOG.Info("%s shard fetch done, Run() func exit", d.String())
 }
@@ -546,6 +541,8 @@ func (d *Dispatcher) executor() {
 		}
 	}
 
+	d.waitFatherShardFinished()
+
 	for node := range d.executorChan {
 		LOG.Info("%s try write data with length[%v], tp[%v] approximate[%v] [d.executorChan:%d]",
 			d.String(), len(node.index), node.tp, node.approximateCreationDateTime, len(d.executorChan))
@@ -569,6 +566,14 @@ func (d *Dispatcher) executor() {
 		d.metric.AddCheckpoint(1)
 		d.checkpointPosition = node.lastSequenceNumber
 		d.checkpointApproximateTime = node.approximateCreationDateTime
+	}
+
+	// update checkpoint: finish
+	err := d.ckptWriter.UpdateWithSet(*d.shard.Shard.ShardId, map[string]interface{}{
+		checkpoint.FieldStatus: checkpoint.StatusDone,
+	}, d.ns.Collection)
+	if err != nil {
+		LOG.Crashf("%s update checkpoint to done failed[%v]", d.String(), err)
 	}
 
 	LOG.Info("%s executor exit", d.String())
