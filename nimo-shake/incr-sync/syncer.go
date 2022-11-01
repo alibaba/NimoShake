@@ -29,7 +29,7 @@ const (
 	CheckpointFlushInterval  = 20
 
 	DispatcherBatcherChanSize  = 4096
-	DispatcherExecuterChanSize = 4096 * 15
+	DispatcherExecuterChanSize = 4096
 
 	IncrBatcherTimeout = 1
 
