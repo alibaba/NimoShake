@@ -110,3 +110,10 @@ func (mw *MongoWriter) Query(shardId string, table string) (*Checkpoint, error) 
 func (mw *MongoWriter) DropAll() error {
 	return mw.conn.Session.DB(mw.db).DropDatabase()
 }
+
+func (fw *MongoWriter) IncrCacheFileInsert(table string, shardId string, fileName string,
+	lastSequenceNumber string, time string) error {
+
+	// write cachefile struct to db
+	return nil
+}

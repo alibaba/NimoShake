@@ -29,6 +29,9 @@ type Writer interface {
 	// query
 	Query(shardId string, table string) (*Checkpoint, error)
 
+	// insert incrSyncCacheFile
+	IncrCacheFileInsert(table string, shardId string, fileName string, lastSequenceNumber string, time string) error
+
 	// drop
 	DropAll() error
 }
