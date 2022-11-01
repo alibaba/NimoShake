@@ -1,27 +1,27 @@
 package full_sync
 
 import (
-	"sync"
 	"fmt"
 	"strings"
+	"sync"
 
 	"nimo-shake/common"
 	"nimo-shake/configure"
 	"nimo-shake/filter"
 	"nimo-shake/writer"
 
-	LOG "github.com/vinllen/log4go"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/gugemichael/nimo4go"
-	"time"
-	"github.com/vinllen/mongo-go-driver/mongo"
+	LOG "github.com/vinllen/log4go"
 	bson2 "github.com/vinllen/mongo-go-driver/bson"
+	"github.com/vinllen/mongo-go-driver/mongo"
+	"time"
 )
 
 var (
 	metricNsMapLock sync.Mutex
-	metricNsMap = make(map[string]*utils.CollectionMetric) // namespace map: db.collection -> collection metric
+	metricNsMap     = make(map[string]*utils.CollectionMetric) // namespace map: db.collection -> collection metric
 )
 
 func Start(dynamoSession *dynamodb.DynamoDB, w writer.Writer) {
@@ -92,40 +92,6 @@ func checkTableExists(tableList []string, w writer.Writer) error {
 	LOG.Info("target.db.exist is set[%v]", conf.Options.TargetDBExist)
 	switch conf.Options.TargetType {
 	case utils.TargetTypeMongo:
-		// mgo driver
-		/*sess := w.GetSession().(*mgo.Session)
-
-		now := time.Now().Format(utils.GolangSecurityTime)
-		collections, err := sess.DB(conf.Options.Id).CollectionNames()
-		if err != nil {
-			return fmt.Errorf("get target collection names error[%v]", err)
-		}
-
-		collectionsMp := utils.StringListToMap(collections)
-		for _, table := range tableList {
-			// check exist on the target mongodb
-			if _, ok := collectionsMp[table]; ok {
-				// exist
-				LOG.Info("table[%v] exists", table)
-				if conf.Options.TargetDBExist == utils.TargetDBExistDrop {
-					if err := sess.DB(conf.Options.Id).C(table).DropCollection(); err != nil {
-						return fmt.Errorf("drop target collection[%v] failed[%v]", table, err)
-					}
-				} else if conf.Options.TargetDBExist == utils.TargetDBExistRename {
-					fromCollection := fmt.Sprintf("%s.%s", conf.Options.Id, table)
-					toCollection := fmt.Sprintf("%s.%s_%v", conf.Options.Id, table, now)
-					if err := sess.DB("admin").Run(bson.D{
-						bson.DocElem{"renameCollection", fromCollection},
-						bson.DocElem{"to", toCollection},
-						bson.DocElem{"dropTarget", false},
-					}, nil); err != nil {
-						return fmt.Errorf("rename target collection[%v] failed[%v]", table, err)
-					}
-				} else {
-					return fmt.Errorf("collection[%v] exists on the target", table)
-				}
-			}
-		}*/
 
 		sess := w.GetSession().(*mongo.Client)
 
@@ -264,7 +230,7 @@ func RestAPI() {
 		if ret.TotalCollection == 0 {
 			ret.Progress = "-%"
 		} else {
-			ret.Progress = fmt.Sprintf("%.2f%%", float64(ret.FinishedCollection) / float64(ret.TotalCollection) * 100)
+			ret.Progress = fmt.Sprintf("%.2f%%", float64(ret.FinishedCollection)/float64(ret.TotalCollection)*100)
 		}
 
 		return ret

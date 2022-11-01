@@ -1,28 +1,29 @@
 package checkpoint
 
 import (
-	"testing"
-	"github.com/stretchr/testify/assert"
 	"fmt"
+	"github.com/stretchr/testify/assert"
+	"testing"
 
 	"nimo-shake/common"
 )
 
 const (
-	TestMongoAddress    = "mongodb://100.81.164.186:31883"
+	TestMongoAddress    = "mongodb://100.81.164.181:18901"
 	TestCheckpointDb    = "test_checkpoint_db"
 	TestCheckpointTable = "test_checkpoint_table"
 )
 
 func TestStatus(t *testing.T) {
+
+	utils.InitialLogger("", "debug", false)
+
 	var err error
 	mongoWriter := NewWriter(CheckpointWriterTypeMongo, TestMongoAddress, TestCheckpointDb)
 	assert.Equal(t, true, mongoWriter != nil, "should be equal")
 
 	fileWriter := NewWriter(CheckpointWriterTypeFile, TestMongoAddress, TestCheckpointDb)
 	assert.Equal(t, true, fileWriter != nil, "should be equal")
-
-	utils.InitialLogger("", "debug", false)
 
 	var nr int
 	// test status: mongo
@@ -92,12 +93,12 @@ func TestCheckpointCRUD(t *testing.T) {
 		}
 
 		err = mongoWriter.Update("test_id", cpkt, TestCheckpointTable)
-		assert.Equal(t, utils.NotFountErr, err.Error(), "should be equal")
+		assert.Equal(t, nil, err, "should be equal")
 
 		err = mongoWriter.UpdateWithSet("test_id", map[string]interface{}{
 			"Status": StatusNotProcess,
 		}, TestCheckpointTable)
-		assert.Equal(t, utils.NotFountErr, err.Error(), "should be equal")
+		assert.Equal(t, nil, err, "should be equal")
 
 		err = mongoWriter.Insert(cpkt, TestCheckpointTable)
 		assert.Equal(t, nil, err, "should be equal")
@@ -129,9 +130,9 @@ func TestCheckpointCRUD(t *testing.T) {
 		assert.Equal(t, nil, err, "should be equal")
 
 		cpkt := &Checkpoint{
-			ShardId:  "test_id",
-			FatherId: "test_father",
-			Status:   StatusNotProcess,
+			ShardId:        "test_id",
+			FatherId:       "test_father",
+			Status:         StatusNotProcess,
 			SequenceNumber: "seq-123",
 		}
 
@@ -156,7 +157,7 @@ func TestCheckpointCRUD(t *testing.T) {
 		assert.Equal(t, cpkt.SequenceNumber, "seq-123", "should be equal")
 
 		err = fileWriter.UpdateWithSet("test_id", map[string]interface{}{
-			"Status": StatusInProcessing,
+			"Status":         StatusInProcessing,
 			"SequenceNumber": "seq-456",
 		}, TestCheckpointTable)
 		assert.Equal(t, nil, err, "should be equal")
