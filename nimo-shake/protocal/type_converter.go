@@ -146,7 +146,7 @@ func (tc *TypeConverter) dfs(v reflect.Value) interface{} {
 func (tc *TypeConverter) convertToDetail(name string, input interface{}) interface{} {
 
 	funcStartT := time.Now()
-	defer LOG.Debug("convertToDetail_func name[%v] input[%v] duration[%v]",  name, input, time.Since(funcStartT))
+	defer LOG.Debug("convertToDetail_func name[%v] input[%v] duration[%v]", name, input, time.Since(funcStartT))
 
 	switch name {
 	case "B":
@@ -214,18 +214,6 @@ func (tc *TypeConverter) convertToDetail(name string, input interface{}) interfa
 		return input.(bool)
 	case "N":
 		v := input.(string)
-		// for new driver, we need to parse the value to mongo-go-driver.bson.decimal128, not mgo.bson.decimal128
-		//val, err := bson.ParseDecimal128(v)
-		//if err != nil {
-		//	LOG.Error("convert N to decimal128 failed[%v]", err)
-		//	val2, err := strconv.ParseFloat(v, 64)
-		//	if err != nil {
-		//		LOG.Crashf("convert N to decimal128 and float64 both failed[%v]", err)
-		//	}
-		//
-		//	val, _ = bson.ParseDecimal128(fmt.Sprintf("%v", val2))
-		//	return val
-		//}
 
 		val_int, err := strconv.Atoi(v)
 		if err == nil {
