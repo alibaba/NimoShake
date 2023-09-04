@@ -2,16 +2,18 @@ package writer
 
 import (
 	"fmt"
-	"nimo-shake/common"
+	utils "nimo-shake/common"
+	"reflect"
 
 	"context"
+	conf "nimo-shake/configure"
+	"strings"
+
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	LOG "github.com/vinllen/log4go"
 	bson2 "github.com/vinllen/mongo-go-driver/bson"
 	"github.com/vinllen/mongo-go-driver/mongo"
 	"github.com/vinllen/mongo-go-driver/mongo/options"
-	"nimo-shake/configure"
-	"strings"
 )
 
 const (
@@ -23,8 +25,8 @@ type MongoCommunityWriter struct {
 	ns             utils.NS
 	conn           *utils.MongoCommunityConn
 	primaryIndexes []*dynamodb.KeySchemaElement
-	ctx    context.Context
-	upsertOption *options.ReplaceOptions
+	ctx            context.Context
+	upsertOption   *options.ReplaceOptions
 }
 
 func NewMongoCommunityWriter(name, address string, ns utils.NS) *MongoCommunityWriter {
@@ -37,10 +39,10 @@ func NewMongoCommunityWriter(name, address string, ns utils.NS) *MongoCommunityW
 	upsertOptions := new(options.ReplaceOptions)
 	upsertOptions.SetUpsert(true)
 	return &MongoCommunityWriter{
-		Name: name,
-		ns:   ns,
-		conn: targetConn,
-		ctx: context.Background(), // default
+		Name:         name,
+		ns:           ns,
+		conn:         targetConn,
+		ctx:          context.Background(), // default
 		upsertOption: upsertOptions,
 	}
 }
@@ -131,7 +133,11 @@ func (mcw *MongoCommunityWriter) WriteBulk(input []interface{}) error {
 			// 1. generate index list
 			indexList := make([]interface{}, len(input))
 			for i, ele := range input {
-				inputData := ele.(bson2.M)
+				inputData, ok := ele.(bson2.M)
+				if !ok {
+					inputData = ele.(map[string]interface{})
+					LOG.Debug("inputData type:%v content:%v", reflect.TypeOf(inputData), inputData)
+				}
 				index := make(bson2.M, len(mcw.primaryIndexes))
 				for _, primaryIndex := range mcw.primaryIndexes {
 					// currently, we only support convert type == 'convert', so there is no type inside
@@ -330,7 +336,7 @@ func (mcw *MongoCommunityWriter) createSingleIndex(primaryIndexes []*dynamodb.Ke
 			keysMap = append(keysMap, bson2.E{ele, 1})
 		}
 		indexModel := mongo.IndexModel{
-			Keys: keysMap,
+			Keys:    keysMap,
 			Options: &options.IndexOptions{},
 		}
 		indexModel.Options.SetUnique(unique)
