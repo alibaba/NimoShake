@@ -34,8 +34,15 @@ func NewMongoWriter(address, db string) *MongoWriter {
 
 func (mw *MongoWriter) FindStatus() (string, error) {
 	var query Status
-	if err := mw.conn.Client.Database(mw.db).Collection(CheckpointStatusTable).FindOne(context.Background(),
-		bson.D{{"Key", CheckpointStatusKey}}).Decode(&query); err != nil {
+
+	ret := mw.conn.Client.Database(mw.db).Collection(CheckpointStatusTable).FindOne(
+		context.Background(),
+		bson.M{
+			"Key": CheckpointStatusKey,
+		},
+	)
+
+	if err := ret.Decode(&query); err != nil {
 		if err.Error() == mongo.ErrNoDocuments.Error() {
 			//if err.Error() == utils.NotFountErr {
 			return CheckpointStatusValueEmpty, nil
@@ -60,7 +67,7 @@ func (mw *MongoWriter) ExtractCheckpoint() (map[string]map[string]*Checkpoint, e
 	// extract checkpoint from mongodb, every collection checkpoint have independent collection(table)
 	ckptMap := make(map[string]map[string]*Checkpoint)
 
-	collectionList, err := mw.conn.Client.Database(mw.db).ListCollectionNames(context.Background(), bson.D{})
+	collectionList, err := mw.conn.Client.Database(mw.db).ListCollectionNames(context.Background(), bson.M{})
 	if err != nil {
 		return nil, fmt.Errorf("fetch checkpoint collection list failed[%v]", err)
 	}
@@ -81,19 +88,19 @@ func (mw *MongoWriter) ExtractCheckpoint() (map[string]map[string]*Checkpoint, e
 
 func (mw *MongoWriter) ExtractSingleCheckpoint(table string) (map[string]*Checkpoint, error) {
 	innerMap := make(map[string]*Checkpoint)
-	cursor, err := mw.conn.Client.Database(mw.db).Collection(table).Find(context.Background(), bson.D{})
+	cursor, err := mw.conn.Client.Database(mw.db).Collection(table).Find(context.Background(), bson.M{})
 	if err != nil {
 		return nil, err
 	}
 
 	for cursor.Next(nil) {
-		var ele *Checkpoint
-		err = cursor.Decode(ele)
+		var ele Checkpoint
+		err = cursor.Decode(&ele)
 		if err != nil {
 			return nil, err
 		}
 
-		innerMap[ele.ShardId] = ele
+		innerMap[ele.ShardId] = &ele
 	}
 
 	return innerMap, nil
