@@ -198,6 +198,10 @@ func PrepareFullSyncCkpt(ckptManager Writer, dynamoSession *dynamodb.DynamoDB,
 		LOG.Info("PrepareFullSyncCkpt streamList[%v]", streamList)
 
 		for _, stream := range streamList.Streams {
+			if filter.IsFilter(*stream.TableName) {
+				continue
+			}
+
 			LOG.Info("check stream with table[%v]", *stream.TableName)
 			describeStreamResult, err := dynamoStreams.DescribeStream(&dynamodbstreams.DescribeStreamInput{
 				StreamArn: stream.StreamArn,
@@ -209,11 +213,6 @@ func PrepareFullSyncCkpt(ckptManager Writer, dynamoSession *dynamodb.DynamoDB,
 
 			if *describeStreamResult.StreamDescription.StreamStatus == "DISABLED" {
 				// stream is disabled
-				continue
-			}
-
-			if filter.IsFilter(*stream.TableName) {
-				LOG.Info("table[%v] filtered", *stream.TableName)
 				continue
 			}
 
