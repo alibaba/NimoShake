@@ -42,7 +42,7 @@ func NewWriter(name, address string, ns utils.NS, logLevel string) Writer {
 	}
 
 	if IsNil(w) {
-		LOG.Crashf("create checkpoint writer[%v] failed", name)
+		LOG.Crashf("create writer[%v] failed", name)
 	}
 
 	return w
