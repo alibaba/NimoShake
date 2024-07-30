@@ -1,13 +1,14 @@
 package writer
 
 import (
-	"nimo-shake/common"
+	utils "nimo-shake/common"
+	"reflect"
 
-	LOG "github.com/vinllen/log4go"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
+	LOG "github.com/vinllen/log4go"
 )
 
-type Writer interface{
+type Writer interface {
 	// create table
 	CreateTable(tableDescribe *dynamodb.TableDescription) error
 	// pass table description
@@ -29,14 +30,29 @@ type Writer interface{
 }
 
 func NewWriter(name, address string, ns utils.NS, logLevel string) Writer {
+	var w Writer = nil
 	switch name {
 	case utils.TargetTypeMongo:
 		// return NewMongoWriter(name, address, ns)
-		return NewMongoCommunityWriter(name, address, ns)
+		w = NewMongoCommunityWriter(name, address, ns)
 	case utils.TargetTypeAliyunDynamoProxy:
-		return NewDynamoProxyWriter(name, address, ns, logLevel)
+		w = NewDynamoProxyWriter(name, address, ns, logLevel)
 	default:
 		LOG.Crashf("unknown writer[%v]", name)
 	}
-	return nil
+
+	if IsNil(w) {
+		LOG.Crashf("create checkpoint writer[%v] failed", name)
+	}
+
+	return w
+}
+
+func IsNil(w Writer) bool {
+	if w == nil {
+		return true
+	}
+
+	v := reflect.ValueOf(w)
+	return v.Kind() == reflect.Ptr && v.IsNil()
 }
