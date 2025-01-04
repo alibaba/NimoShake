@@ -5,18 +5,19 @@ import (
 	"strings"
 	"sync"
 
-	"nimo-shake/common"
-	"nimo-shake/configure"
+	utils "nimo-shake/common"
+	conf "nimo-shake/configure"
 	"nimo-shake/filter"
 	"nimo-shake/writer"
 
+	"time"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"github.com/gugemichael/nimo4go"
+	nimo "github.com/gugemichael/nimo4go"
 	LOG "github.com/vinllen/log4go"
-	bson2 "github.com/vinllen/mongo-go-driver/bson"
-	"github.com/vinllen/mongo-go-driver/mongo"
-	"time"
+	bson2 "go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 var (
@@ -123,7 +124,7 @@ func checkTableExists(tableList []string, w writer.Writer) error {
 						return fmt.Errorf("rename target collection[%v] failed[%v]", table, err)
 					}
 				} else {
-					return fmt.Errorf("collection[%v] exists on the target", table)
+					//return fmt.Errorf("collection[%v] exists on the target", table)
 				}
 			}
 		}

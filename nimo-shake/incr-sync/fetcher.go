@@ -4,10 +4,12 @@ import (
 	"time"
 
 	"nimo-shake/checkpoint"
-	"nimo-shake/common"
-	"nimo-shake/configure"
+	utils "nimo-shake/common"
+	conf "nimo-shake/configure"
+	"nimo-shake/qps"
 
 	"fmt"
+
 	"github.com/aws/aws-sdk-go/service/dynamodbstreams"
 	LOG "github.com/vinllen/log4go"
 )
@@ -46,6 +48,10 @@ func NewFetcher(table string, stream *dynamodbstreams.Stream, shardChan chan *ut
 func (f *Fetcher) Run() {
 	md5Map := make(map[string]uint64)
 	tableEpoch := make(map[string]int) // GlobalFetcherMoreFlag, restore previous epoch
+
+	qos := qps.StartQoS(10)
+	defer qos.Close()
+
 	for range time.NewTicker(FetcherInterval * time.Second).C {
 		shardList := make([]*utils.ShardNode, 0)
 		// LOG.Debug("fetch table[%v] stream", table)
@@ -69,6 +75,9 @@ func (f *Fetcher) Run() {
 					StreamArn: f.stream.StreamArn,
 				}
 			}
+
+			// limit qos of api DescribeStreamInput
+			<-qos.Bucket
 
 			desStream, err := f.dynamoClient.DescribeStream(describeStreamInput)
 			if err != nil {

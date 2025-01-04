@@ -2,10 +2,11 @@ package checkpoint
 
 import (
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"testing"
 
-	"nimo-shake/common"
+	"github.com/stretchr/testify/assert"
+
+	utils "nimo-shake/common"
 )
 
 const (

@@ -44,6 +44,7 @@ modules=(nimo-shake nimo-full-check)
 goos=(linux darwin)
 for g in "${goos[@]}"; do
     export GOOS=$g
+    export GOARCH=amd64
     echo "try build goos=$g"
     for i in "${modules[@]}" ; do
         echo "build "$i

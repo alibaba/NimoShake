@@ -37,6 +37,8 @@ type Configuration struct {
 	FullEnableIndexPrimary            bool   `config:"full.enable_index.primary"`
 	FullEnableIndexUser               bool   `config:"full.enable_index.user"`
 	FullExecutorInsertOnDupUpdate     bool   `config:"full.executor.insert_on_dup_update"`
+	FullFilterExpression              string `config:"full.read.filter_expression"`
+	FullFilterAttributeValues         string `config:"full.read.filter_attributevalues"`
 	ConvertType                       string `config:"convert.type"`
 	ConvertId                         string `config:"convert._id"`
 	IncreaseConcurrency               uint   `config:"increase.concurrency"`

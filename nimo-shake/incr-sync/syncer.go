@@ -2,24 +2,24 @@ package incr_sync
 
 import (
 	"fmt"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/request"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"sync"
 	"time"
 
+	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/aws/aws-sdk-go/aws/request"
+	"github.com/aws/aws-sdk-go/service/dynamodb"
+
 	"nimo-shake/checkpoint"
-	"nimo-shake/common"
-	"nimo-shake/configure"
+	utils "nimo-shake/common"
+	conf "nimo-shake/configure"
 	"nimo-shake/protocal"
 	"nimo-shake/qps"
 	"nimo-shake/writer"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/dynamodbstreams"
-	"github.com/gugemichael/nimo4go"
+	nimo "github.com/gugemichael/nimo4go"
 	LOG "github.com/vinllen/log4go"
-	"github.com/vinllen/mgo/bson"
 )
 
 const (
@@ -601,11 +601,11 @@ func (d *Dispatcher) ckptManager() {
 			break
 		}
 
-		var ckpt bson.M
+		var ckpt map[string]interface{}
 		if d.checkpointPosition == "" {
 			if d.shardIt != "" {
 				// update shardIt
-				ckpt = bson.M{
+				ckpt = map[string]interface{}{
 					checkpoint.FieldShardIt:         d.shardIt,
 					checkpoint.FieldTimestamp:       time.Now().Format(utils.GolangSecurityTime),
 					checkpoint.FieldApproximateTime: d.checkpointApproximateTime,

@@ -2,9 +2,10 @@ package protocal
 
 import (
 	"fmt"
-	bson2 "github.com/vinllen/mongo-go-driver/bson"
 	conf "nimo-shake/configure"
 	"reflect"
+
+	bson2 "go.mongodb.org/mongo-driver/bson"
 
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	LOG "github.com/vinllen/log4go"
