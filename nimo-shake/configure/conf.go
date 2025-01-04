@@ -44,6 +44,7 @@ type Configuration struct {
 	IncreaseConcurrency               uint   `config:"increase.concurrency"`
 	IncreaseExecutorInsertOnDupUpdate bool   `config:"increase.executor.insert_on_dup_update"`
 	IncreaseExecutorUpsert            bool   `config:"increase.executor.upsert"`
+	IncreasePersistDir                string `config:"increase.persist.dir"`
 	CheckpointType                    string `config:"checkpoint.type"`
 	CheckpointAddress                 string `config:"checkpoint.address"`
 	CheckpointDb                      string `config:"checkpoint.db"`

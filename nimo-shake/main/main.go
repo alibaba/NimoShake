@@ -90,7 +90,7 @@ func main() {
 	}
 
 	nimo.Profiling(int(conf.Options.SystemProfile))
-	nimo.RegisterSignalForProfiling(syscall.Signal(utils.SIGNALPROFILE)) // syscall.SIGUSR2
+	nimo.RegisterSignalForProfiling(syscall.Signal(utils.SIGNALPROFILE))                     // syscall.SIGUSR2
 	nimo.RegisterSignalForPrintStack(syscall.Signal(utils.SIGNALSTACK), func(bytes []byte) { // syscall.SIGUSR1
 		LOG.Info(string(bytes))
 	})
@@ -115,6 +115,9 @@ func sanitizeOptions() error {
 		if conf.Options.SyncMode != utils.SyncModeAll {
 			return fmt.Errorf("sync_mode must be all when incr_sync_parallel is true")
 		}
+	}
+	if conf.Options.IncreasePersistDir == "" {
+		conf.Options.IncreasePersistDir = "/tmp/"
 	}
 
 	if conf.Options.SourceAccessKeyID == "" {

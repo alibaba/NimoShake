@@ -93,40 +93,6 @@ func checkTableExists(tableList []string, w writer.Writer) error {
 	LOG.Info("target.db.exist is set[%v]", conf.Options.TargetDBExist)
 	switch conf.Options.TargetType {
 	case utils.TargetTypeMongo:
-		// mgo driver
-		/*sess := w.GetSession().(*mgo.Session)
-
-		now := time.Now().Format(utils.GolangSecurityTime)
-		collections, err := sess.DB(conf.Options.Id).CollectionNames()
-		if err != nil {
-			return fmt.Errorf("get target collection names error[%v]", err)
-		}
-
-		collectionsMp := utils.StringListToMap(collections)
-		for _, table := range tableList {
-			// check exist on the target mongodb
-			if _, ok := collectionsMp[table]; ok {
-				// exist
-				LOG.Info("table[%v] exists", table)
-				if conf.Options.TargetDBExist == utils.TargetDBExistDrop {
-					if err := sess.DB(conf.Options.Id).C(table).DropCollection(); err != nil {
-						return fmt.Errorf("drop target collection[%v] failed[%v]", table, err)
-					}
-				} else if conf.Options.TargetDBExist == utils.TargetDBExistRename {
-					fromCollection := fmt.Sprintf("%s.%s", conf.Options.Id, table)
-					toCollection := fmt.Sprintf("%s.%s_%v", conf.Options.Id, table, now)
-					if err := sess.DB("admin").Run(bson.D{
-						bson.DocElem{"renameCollection", fromCollection},
-						bson.DocElem{"to", toCollection},
-						bson.DocElem{"dropTarget", false},
-					}, nil); err != nil {
-						return fmt.Errorf("rename target collection[%v] failed[%v]", table, err)
-					}
-				} else {
-					return fmt.Errorf("collection[%v] exists on the target", table)
-				}
-			}
-		}*/
 
 		sess := w.GetSession().(*mongo.Client)
 

@@ -3,6 +3,8 @@ package checkpoint
 import (
 	"context"
 	"fmt"
+	"github.com/vinllen/mongo-go-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/mongo"
 
 	utils "nimo-shake/common"
 
@@ -100,7 +102,13 @@ func (mw *MongoWriter) ExtractSingleCheckpoint(table string) (map[string]*Checkp
 		data = append(data, &elem)
 	}
 
-	for _, ele := range data {
+	for cursor.Next(nil) {
+		var ele *Checkpoint
+		err = cursor.Decode(ele)
+		if err != nil {
+			return nil, err
+		}
+
 		innerMap[ele.ShardId] = ele
 	}
 
@@ -138,4 +146,11 @@ func (mw *MongoWriter) Query(shardId string, table string) (*Checkpoint, error) 
 
 func (mw *MongoWriter) DropAll() error {
 	return mw.nconn.Client.Database(mw.db).Drop(context.TODO())
+}
+
+func (fw *MongoWriter) IncrCacheFileInsert(table string, shardId string, fileName string,
+	lastSequenceNumber string, time string) error {
+
+	// write cachefile struct to db
+	return nil
 }

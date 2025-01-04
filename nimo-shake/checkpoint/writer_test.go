@@ -10,20 +10,21 @@ import (
 )
 
 const (
-	TestMongoAddress    = "mongodb://1.1.42.51:27317/admin?directConnection=true"
+	TestMongoAddress    = "mongodb://100.81.164.181:18901"
 	TestCheckpointDb    = "test_checkpoint_db"
 	TestCheckpointTable = "test_checkpoint_table"
 )
 
 func TestStatus(t *testing.T) {
+
+	utils.InitialLogger("", "debug", false)
+
 	var err error
 	mongoWriter := NewWriter(CheckpointWriterTypeMongo, TestMongoAddress, TestCheckpointDb)
 	assert.Equal(t, true, mongoWriter != nil, "should be equal")
 
 	fileWriter := NewWriter(CheckpointWriterTypeFile, TestMongoAddress, TestCheckpointDb)
 	assert.Equal(t, true, fileWriter != nil, "should be equal")
-
-	utils.InitialLogger("", "debug", false)
 
 	var nr int
 	// test status: mongo

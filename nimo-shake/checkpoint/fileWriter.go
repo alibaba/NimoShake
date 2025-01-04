@@ -4,13 +4,13 @@ import (
 	"os"
 	"sync"
 
+	"bytes"
+	"encoding/json"
+	"fmt"
 	LOG "github.com/vinllen/log4go"
 	"io/ioutil"
-	"fmt"
-	"encoding/json"
 	"path/filepath"
 	"reflect"
-	"bytes"
 	"strings"
 )
 
@@ -382,5 +382,10 @@ func (fw *FileWriter) writeJsonList(f *os.File, input []*Checkpoint) error {
 			return err
 		}
 	}
+	return nil
+}
+
+func (fw *FileWriter) IncrCacheFileInsert(table string, shardId string, fileName string,
+	lastSequenceNumber string, time string) error {
 	return nil
 }
