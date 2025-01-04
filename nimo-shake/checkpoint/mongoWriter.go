@@ -3,8 +3,6 @@ package checkpoint
 import (
 	"context"
 	"fmt"
-	"github.com/vinllen/mongo-go-driver/mongo/options"
-	"go.mongodb.org/mongo-driver/mongo"
 
 	utils "nimo-shake/common"
 
