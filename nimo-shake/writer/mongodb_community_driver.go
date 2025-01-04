@@ -11,9 +11,9 @@ import (
 
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	LOG "github.com/vinllen/log4go"
-	bson2 "github.com/vinllen/mongo-go-driver/bson"
-	"github.com/vinllen/mongo-go-driver/mongo"
-	"github.com/vinllen/mongo-go-driver/mongo/options"
+	bson2 "go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 const (

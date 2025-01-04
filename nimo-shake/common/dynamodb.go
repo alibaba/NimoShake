@@ -1,13 +1,14 @@
 package utils
 
 import (
-	"net/http"
-	"time"
 	"fmt"
+	"net/http"
+	"strings"
+	"time"
 
-	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/dynamodbstreams"
 )
@@ -23,9 +24,9 @@ var (
  */
 func InitSession(accessKeyID, secretAccessKey, sessionToken, region, endpoint string, maxRetries, timeout uint) error {
 	config := &aws.Config{
-		Region: aws.String(region),
+		Region:      aws.String(region),
 		Credentials: credentials.NewStaticCredentials(accessKeyID, secretAccessKey, sessionToken),
-		MaxRetries: aws.Int(int(maxRetries)),
+		MaxRetries:  aws.Int(int(maxRetries)),
 		HTTPClient: &http.Client{
 			Timeout: time.Duration(timeout) * time.Millisecond,
 		},
@@ -116,4 +117,41 @@ func ParsePrimaryAndSortKey(primaryIndexes []*dynamodb.KeySchemaElement, parseMa
 		}
 	}
 	return primaryKey, sortKey, nil
+}
+
+/*
+input:
+
+	"begin```N```1646724207280~~~end```S```1646724207283"
+
+output:
+
+	map[string]*dynamodb.AttributeValue{
+		":begin": &dynamodb.AttributeValue{N: aws.String("1646724207280")},
+		":end": &dynamodb.AttributeValue{S: aws.String("1646724207283")},
+	}
+*/
+func ParseAttributes(input string) map[string]*dynamodb.AttributeValue {
+	result := make(map[string]*dynamodb.AttributeValue)
+	pairs := strings.Split(input, "~~~")
+
+	for _, pair := range pairs {
+		parts := strings.Split(pair, "```")
+		if len(parts) != 3 {
+			continue
+		}
+
+		key := ":" + parts[0]
+		dataType := parts[1]
+		value := parts[2]
+
+		switch dataType {
+		case "N":
+			result[key] = &dynamodb.AttributeValue{N: aws.String(value)}
+		case "S":
+			result[key] = &dynamodb.AttributeValue{S: aws.String(value)}
+		}
+	}
+
+	return result
 }

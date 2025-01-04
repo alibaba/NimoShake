@@ -1,7 +1,7 @@
 package utils
 
 import (
-	"github.com/gugemichael/nimo4go"
+	nimo "github.com/gugemichael/nimo4go"
 )
 
 var (

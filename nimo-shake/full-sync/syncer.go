@@ -1,27 +1,28 @@
 package full_sync
 
 import (
-	"sync"
 	"fmt"
 	"strings"
+	"sync"
 
-	"nimo-shake/common"
-	"nimo-shake/configure"
+	utils "nimo-shake/common"
+	conf "nimo-shake/configure"
 	"nimo-shake/filter"
 	"nimo-shake/writer"
 
-	LOG "github.com/vinllen/log4go"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/gugemichael/nimo4go"
 	"time"
-	"github.com/vinllen/mongo-go-driver/mongo"
-	bson2 "github.com/vinllen/mongo-go-driver/bson"
+
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/service/dynamodb"
+	nimo "github.com/gugemichael/nimo4go"
+	LOG "github.com/vinllen/log4go"
+	bson2 "go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 var (
 	metricNsMapLock sync.Mutex
-	metricNsMap = make(map[string]*utils.CollectionMetric) // namespace map: db.collection -> collection metric
+	metricNsMap     = make(map[string]*utils.CollectionMetric) // namespace map: db.collection -> collection metric
 )
 
 func Start(dynamoSession *dynamodb.DynamoDB, w writer.Writer) {
@@ -157,7 +158,7 @@ func checkTableExists(tableList []string, w writer.Writer) error {
 						return fmt.Errorf("rename target collection[%v] failed[%v]", table, err)
 					}
 				} else {
-					return fmt.Errorf("collection[%v] exists on the target", table)
+					//return fmt.Errorf("collection[%v] exists on the target", table)
 				}
 			}
 		}
@@ -264,7 +265,7 @@ func RestAPI() {
 		if ret.TotalCollection == 0 {
 			ret.Progress = "-%"
 		} else {
-			ret.Progress = fmt.Sprintf("%.2f%%", float64(ret.FinishedCollection) / float64(ret.TotalCollection) * 100)
+			ret.Progress = fmt.Sprintf("%.2f%%", float64(ret.FinishedCollection)/float64(ret.TotalCollection)*100)
 		}
 
 		return ret

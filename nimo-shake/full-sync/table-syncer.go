@@ -2,13 +2,14 @@ package full_sync
 
 import (
 	"fmt"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/request"
 	"sync"
 	"time"
 
-	"nimo-shake/common"
-	"nimo-shake/configure"
+	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/aws/aws-sdk-go/aws/request"
+
+	utils "nimo-shake/common"
+	conf "nimo-shake/configure"
 	"nimo-shake/protocal"
 	"nimo-shake/qps"
 	"nimo-shake/writer"
@@ -164,13 +165,18 @@ func (ts *tableSyncer) fetcher() {
 				<-qos.Bucket
 
 				startT := time.Now()
-				out, err := ts.sourceConn.Scan(&dynamodb.ScanInput{
+				scanInput := &dynamodb.ScanInput{
 					TableName:         aws.String(ts.ns.Collection),
 					TotalSegments:     aws.Int64(int64(conf.Options.FullReadConcurrency)),
 					Segment:           aws.Int64(segmentId),
 					ExclusiveStartKey: previousKey,
 					Limit:             aws.Int64(conf.Options.QpsFullBatchNum),
-				})
+				}
+				if len(conf.Options.FullFilterExpression) > 0 {
+					scanInput.FilterExpression = aws.String(conf.Options.FullFilterExpression)
+					scanInput.ExpressionAttributeValues = utils.ParseAttributes(conf.Options.FullFilterAttributeValues)
+				}
+				out, err := ts.sourceConn.Scan(scanInput)
 				if err != nil {
 					// TODO check network error and retry
 					if aerr, ok := err.(awserr.Error); ok {

@@ -1,22 +1,26 @@
 package checkpoint
 
 import (
+	"context"
 	"fmt"
 
-	"nimo-shake/common"
+	utils "nimo-shake/common"
 
 	LOG "github.com/vinllen/log4go"
-	"github.com/vinllen/mgo/bson"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type MongoWriter struct {
 	address string
-	conn    *utils.MongoConn
-	db      string
+	//conn    *utils.MongoConn
+	nconn *utils.MongoCommunityConn
+	db    string
 }
 
 func NewMongoWriter(address, db string) *MongoWriter {
-	targetConn, err := utils.NewMongoConn(address, utils.ConnectModePrimary, true)
+	targetConn, err := utils.NewMongoCommunityConn(address, utils.ConnectModePrimary, true)
 	if err != nil {
 		LOG.Error("create mongodb with address[%v] db[%v] connection error[%v]", address, db, err)
 		return nil
@@ -24,16 +28,16 @@ func NewMongoWriter(address, db string) *MongoWriter {
 
 	return &MongoWriter{
 		address: address,
-		conn:    targetConn,
+		nconn:   targetConn,
 		db:      db,
 	}
 }
 
 func (mw *MongoWriter) FindStatus() (string, error) {
 	var query Status
-	if err := mw.conn.Session.DB(mw.db).C(CheckpointStatusTable).Find(bson.M{"Key": CheckpointStatusKey}).
-		One(&query); err != nil {
-		if err.Error() == utils.NotFountErr {
+	if err := mw.nconn.Client.Database(mw.db).Collection(CheckpointStatusTable).FindOne(context.TODO(),
+		bson.M{"Key": CheckpointStatusKey}).Decode(&query); err != nil {
+		if err == mongo.ErrNoDocuments {
 			return CheckpointStatusValueEmpty, nil
 		}
 		return "", err
@@ -47,7 +51,11 @@ func (mw *MongoWriter) UpdateStatus(status string) error {
 		Key:   CheckpointStatusKey,
 		Value: status,
 	}
-	_, err := mw.conn.Session.DB(mw.db).C(CheckpointStatusTable).Upsert(bson.M{"Key": CheckpointStatusKey}, update)
+
+	opts := options.Update().SetUpsert(true)
+	filter := bson.M{"Key": CheckpointStatusKey}
+	updateStr := bson.M{"$set": update}
+	_, err := mw.nconn.Client.Database(mw.db).Collection(CheckpointStatusTable).UpdateOne(context.TODO(), filter, updateStr, opts)
 	return err
 }
 
@@ -55,7 +63,7 @@ func (mw *MongoWriter) ExtractCheckpoint() (map[string]map[string]*Checkpoint, e
 	// extract checkpoint from mongodb, every collection checkpoint have independent collection(table)
 	ckptMap := make(map[string]map[string]*Checkpoint)
 
-	collectionList, err := mw.conn.Session.DB(mw.db).CollectionNames()
+	collectionList, err := mw.nconn.Client.Database(mw.db).ListCollectionNames(context.TODO(), bson.M{})
 	if err != nil {
 		return nil, fmt.Errorf("fetch checkpoint collection list failed[%v]", err)
 	}
@@ -77,9 +85,19 @@ func (mw *MongoWriter) ExtractCheckpoint() (map[string]map[string]*Checkpoint, e
 func (mw *MongoWriter) ExtractSingleCheckpoint(table string) (map[string]*Checkpoint, error) {
 	innerMap := make(map[string]*Checkpoint)
 	data := make([]*Checkpoint, 0)
-	err := mw.conn.Session.DB(mw.db).C(table).Find(bson.M{}).All(&data)
+
+	cursor, err := mw.nconn.Client.Database(mw.db).Collection(table).Find(context.TODO(), bson.M{})
 	if err != nil {
 		return nil, err
+	}
+	defer cursor.Close(context.TODO())
+
+	for cursor.Next(context.TODO()) {
+		var elem Checkpoint
+		if err := cursor.Decode(&elem); err != nil {
+			return nil, err
+		}
+		data = append(data, &elem)
 	}
 
 	for _, ele := range data {
@@ -90,23 +108,34 @@ func (mw *MongoWriter) ExtractSingleCheckpoint(table string) (map[string]*Checkp
 }
 
 func (mw *MongoWriter) Insert(ckpt *Checkpoint, table string) error {
-	return mw.conn.Session.DB(mw.db).C(table).Insert(*ckpt)
+	_, err := mw.nconn.Client.Database(mw.db).Collection(table).InsertOne(context.TODO(), ckpt)
+
+	return err
 }
 
 func (mw *MongoWriter) Update(shardId string, ckpt *Checkpoint, table string) error {
-	return mw.conn.Session.DB(mw.db).C(table).Update(bson.M{"ShardId": shardId}, *ckpt)
+
+	filter := bson.M{"ShardId": shardId}
+	updateStr := bson.M{"$set": ckpt}
+	_, err := mw.nconn.Client.Database(mw.db).Collection(table).UpdateOne(context.TODO(), filter, updateStr)
+	return err
 }
 
 func (mw *MongoWriter) UpdateWithSet(shardId string, input map[string]interface{}, table string) error {
-	return mw.conn.Session.DB(mw.db).C(table).Update(bson.M{"ShardId": shardId}, bson.M{"$set": input})
+
+	filter := bson.M{"ShardId": shardId}
+	updateStr := bson.M{"$set": input}
+	_, err := mw.nconn.Client.Database(mw.db).Collection(table).UpdateOne(context.TODO(), filter, updateStr)
+	return err
 }
 
 func (mw *MongoWriter) Query(shardId string, table string) (*Checkpoint, error) {
 	var res Checkpoint
-	err := mw.conn.Session.DB(mw.db).C(table).Find(bson.M{"ShardId": shardId}).One(&res)
+	err := mw.nconn.Client.Database(mw.db).Collection(table).FindOne(context.TODO(), bson.M{"ShardId": shardId}).Decode(&res)
+
 	return &res, err
 }
 
 func (mw *MongoWriter) DropAll() error {
-	return mw.conn.Session.DB(mw.db).DropDatabase()
+	return mw.nconn.Client.Database(mw.db).Drop(context.TODO())
 }

@@ -1,20 +1,21 @@
 package writer
 
 import (
-	"testing"
 	"fmt"
+	utils "nimo-shake/common"
+	conf "nimo-shake/configure"
 	"reflect"
-	"nimo-shake/common"
-	"nimo-shake/configure"
+	"testing"
 
-	"github.com/aws/aws-sdk-go/service/dynamodb"
+	"context"
+	"nimo-shake/unit_test_common"
+
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/stretchr/testify/assert"
 	"github.com/vinllen/mgo"
 	"github.com/vinllen/mgo/bson"
-	"nimo-shake/unit_test_common"
-	"context"
-	bson2 "github.com/vinllen/mongo-go-driver/bson"
+	bson2 "go.mongodb.org/mongo-driver/bson"
 )
 
 const (
@@ -513,7 +514,7 @@ func TestMongoIndex(t *testing.T) {
 				KeyType:       aws.String("RANGE"),
 			},
 		}
-		parseMap := map[string]string {
+		parseMap := map[string]string{
 			"pid": "S",
 			"sid": "S",
 		}
@@ -559,7 +560,7 @@ func TestMongoIndex(t *testing.T) {
 				KeyType:       aws.String("RANGE"),
 			},
 		}
-		parseMap := map[string]string {
+		parseMap := map[string]string{
 			"pid": "S",
 			"sid": "S",
 		}
@@ -601,7 +602,7 @@ func TestMongoIndex(t *testing.T) {
 				KeyType:       aws.String("HASH"),
 			},
 		}
-		parseMap := map[string]string {
+		parseMap := map[string]string{
 			"pid": "S",
 		}
 		_, err = client.createSingleIndex(keyEle, parseMap, false)
@@ -641,7 +642,7 @@ func TestMongoIndex(t *testing.T) {
 				KeyType:       aws.String("HASH"),
 			},
 		}
-		parseMap := map[string]string {
+		parseMap := map[string]string{
 			"pid": "S",
 		}
 		_, err = client.createSingleIndex(keyEle, parseMap, true)
@@ -685,7 +686,7 @@ func TestMongoIndex(t *testing.T) {
 				KeyType:       aws.String("RANGE"),
 			},
 		}
-		parseMap := map[string]string {
+		parseMap := map[string]string{
 			"pid": "S",
 			"sid": "S",
 		}
@@ -731,7 +732,7 @@ func TestMongoIndex(t *testing.T) {
 				KeyType:       aws.String("RANGE"),
 			},
 		}
-		parseMap := map[string]string {
+		parseMap := map[string]string{
 			"pid": "S",
 			"sid": "S",
 		}
@@ -773,7 +774,7 @@ func TestMongoIndex(t *testing.T) {
 				KeyType:       aws.String("HASH"),
 			},
 		}
-		parseMap := map[string]string {
+		parseMap := map[string]string{
 			"pid": "S",
 		}
 		_, err = client.createSingleIndex(keyEle, parseMap, false)
@@ -786,7 +787,6 @@ func TestMongoIndex(t *testing.T) {
 
 		assert.Equal(t, 2, len(res), "should be equal") // _id + 2
 		assert.Equal(t, true, indexExists(res, "pid_1", false), "should be equal")
-
 
 		client.Close()
 	}
@@ -814,7 +814,7 @@ func TestMongoIndex(t *testing.T) {
 				KeyType:       aws.String("HASH"),
 			},
 		}
-		parseMap := map[string]string {
+		parseMap := map[string]string{
 			"pid": "S",
 		}
 		_, err = client.createSingleIndex(keyEle, parseMap, true)

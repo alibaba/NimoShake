@@ -2,14 +2,15 @@ package protocal
 
 import (
 	"fmt"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
-	LOG "github.com/vinllen/log4go"
-	bson2 "github.com/vinllen/mongo-go-driver/bson"
-	"github.com/vinllen/mongo-go-driver/bson/primitive"
 	conf "nimo-shake/configure"
 	"reflect"
 	"strconv"
 	"time"
+
+	"github.com/aws/aws-sdk-go/service/dynamodb"
+	LOG "github.com/vinllen/log4go"
+	bson2 "go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type TypeConverter struct {
@@ -146,7 +147,7 @@ func (tc *TypeConverter) dfs(v reflect.Value) interface{} {
 func (tc *TypeConverter) convertToDetail(name string, input interface{}) interface{} {
 
 	funcStartT := time.Now()
-	defer LOG.Debug("convertToDetail_func name[%v] input[%v] duration[%v]",  name, input, time.Since(funcStartT))
+	defer LOG.Debug("convertToDetail_func name[%v] input[%v] duration[%v]", name, input, time.Since(funcStartT))
 
 	switch name {
 	case "B":
