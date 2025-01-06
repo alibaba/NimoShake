@@ -1,6 +1,8 @@
 package checkpoint
 
 import (
+	"reflect"
+
 	LOG "github.com/vinllen/log4go"
 )
 
@@ -37,7 +39,7 @@ type Writer interface {
 }
 
 func NewWriter(name, address, db string) Writer {
-	var w Writer
+	var w Writer = nil
 	switch name {
 	case CheckpointWriterTypeMongo:
 		w = NewMongoWriter(address, db)
@@ -46,9 +48,19 @@ func NewWriter(name, address, db string) Writer {
 	default:
 		LOG.Crashf("unknown checkpoint writer[%v]", name)
 	}
-	if w == nil {
+
+	if IsNil(w) {
 		LOG.Crashf("create checkpoint writer[%v] failed", name)
-		return nil
 	}
+
 	return w
+}
+
+func IsNil(w Writer) bool {
+	if w == nil {
+		return true
+	}
+
+	v := reflect.ValueOf(w)
+	return v.Kind() == reflect.Ptr && v.IsNil()
 }
