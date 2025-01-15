@@ -367,6 +367,8 @@ func (d *Dispatcher) getRecords(shardIt string) {
 
 		next = records.NextShardIterator
 
+		LOG.Debug("getRecords shardIt[%s] record_number[%d]", shardIt, len(records.Records))
+
 		if len(records.Records) == 0 && next != nil {
 			d.shardIt = *next // update shardIt
 			time.Sleep(GetRecordsInterval * time.Second)

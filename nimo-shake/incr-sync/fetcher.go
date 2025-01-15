@@ -97,7 +97,7 @@ func (f *Fetcher) Run() {
 					f.table, *desStream.StreamDescription.LastEvaluatedShardId)
 			}
 		}
-		LOG.Info("fetch.Run table[%v] allShards[%v]", f.table, allShards)
+		LOG.Info("fetch.Run table[%v] allShards(len:%d)[%v]", f.table, len(allShards), allShards)
 
 		rootNode := utils.BuildShardTree(allShards, f.table, *f.stream.StreamArn)
 		md5 := utils.CalMd5(rootNode)
@@ -115,6 +115,8 @@ func (f *Fetcher) Run() {
 			LOG.Info("table[%v] curEpoch[%v] != preEpoch[%v]", f.table, curEpoch, preEpoch)
 			tableEpoch[f.table] = curEpoch
 		} else {
+			LOG.Info("table[%v] md5-old[%v] md5-new[%v]", f.table, val, md5)
+
 			continue
 		}
 
@@ -122,17 +124,19 @@ func (f *Fetcher) Run() {
 		ckptSingleMap, err := f.ckptWriter.ExtractSingleCheckpoint(f.table)
 		if err != nil {
 			LOG.Crashf("extract checkpoint failed[%v]", err)
+		} else {
+			LOG.Info("table:[%v] ckptSingleMap:[%v]", f.table, ckptSingleMap)
 		}
 
 		if tree, err := utils.PrintShardTree(rootNode); err != nil {
 			LOG.Info("table[%v] traverse to print tree failed[%v]", f.table, err)
 		} else {
-			LOG.Info("traverse stream tree for table[%v]: \n-----\n%v\n-----", f.table, tree)
+			LOG.Info("traverse stream tree for table[%v](father->child): \n-----\n%v\n-----", f.table, tree)
 		}
 
 		// traverse shards
 		err = utils.TraverseShard(rootNode, func(node *utils.ShardNode) error {
-			LOG.Debug("traverse shard[%v]", *node.Shard.ShardId)
+			LOG.Info("traverse shard[%v]", *node.Shard.ShardId)
 			id := *node.Shard.ShardId
 			var father string
 			if node.Shard.ParentShardId != nil {
@@ -153,7 +157,7 @@ func (f *Fetcher) Run() {
 				}
 				f.ckptWriter.Insert(newCkpt, f.table)
 				shardList = append(shardList, node)
-				LOG.Info("insert new checkpoint: %v", *newCkpt)
+				LOG.Info("insert new checkpoint: %v ckptSingleMap[id]:%v", *newCkpt, ckptSingleMap[id])
 				return utils.StopTraverseSonErr
 			}
 			switch ckpt.Status {
