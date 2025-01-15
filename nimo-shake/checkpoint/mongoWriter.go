@@ -100,13 +100,7 @@ func (mw *MongoWriter) ExtractSingleCheckpoint(table string) (map[string]*Checkp
 		data = append(data, &elem)
 	}
 
-	for cursor.Next(nil) {
-		var ele *Checkpoint
-		err = cursor.Decode(ele)
-		if err != nil {
-			return nil, err
-		}
-
+	for _, ele := range data {
 		innerMap[ele.ShardId] = ele
 	}
 
