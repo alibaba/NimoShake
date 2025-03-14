@@ -1,23 +1,25 @@
 package checker
 
 import (
+	"context"
 	"fmt"
 	"sync"
 
+	conf "nimo-full-check/configure"
 	shakeUtils "nimo-shake/common"
 	shakeFilter "nimo-shake/filter"
-	"nimo-full-check/configure"
 
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	LOG "github.com/vinllen/log4go"
+	"go.mongodb.org/mongo-driver/bson"
 )
 
 type Checker struct {
 	dynamoSession *dynamodb.DynamoDB
-	mongoClient   *shakeUtils.MongoConn
+	mongoClient   *shakeUtils.MongoCommunityConn
 }
 
-func NewChecker(dynamoSession *dynamodb.DynamoDB, mongoClient *shakeUtils.MongoConn) *Checker {
+func NewChecker(dynamoSession *dynamodb.DynamoDB, mongoClient *shakeUtils.MongoCommunityConn) *Checker {
 	return &Checker{
 		dynamoSession: dynamoSession,
 		mongoClient:   mongoClient,
@@ -78,7 +80,7 @@ func (c *Checker) Run() error {
 }
 
 func (c *Checker) checkTableExist(tableList []string) error {
-	collections, err := c.mongoClient.Session.DB(conf.Opts.Id).CollectionNames()
+	collections, err := c.mongoClient.Client.Database(conf.Opts.Id).ListCollectionNames(context.TODO(), bson.M{})
 	if err != nil {
 		return fmt.Errorf("get target collection names error[%v]", err)
 	}

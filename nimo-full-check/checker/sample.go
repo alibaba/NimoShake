@@ -7,12 +7,12 @@ const (
 )
 
 type Sample struct {
-	sampleCnt int
-	totalCnt  int
+	sampleCnt int64
+	totalCnt  int64
 	source    *rand.Rand
 }
 
-func NewSample(sampleCnt, totalCnt int) *Sample {
+func NewSample(sampleCnt, totalCnt int64) *Sample {
 	return &Sample{
 		sampleCnt: sampleCnt,
 		totalCnt:  totalCnt,
@@ -28,5 +28,5 @@ func (s *Sample) Hit() bool {
 		return false
 	}
 
-	return s.source.Intn(s.totalCnt) < s.sampleCnt
+	return s.source.Int63n(s.totalCnt) < s.sampleCnt
 }

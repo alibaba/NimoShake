@@ -1,20 +1,81 @@
 package checker
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	conf "nimo-full-check/configure"
 	"os"
+	"reflect"
 
-	"nimo-full-check/configure"
 	shakeUtils "nimo-shake/common"
 	"nimo-shake/protocal"
 	shakeQps "nimo-shake/qps"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
+	"github.com/google/go-cmp/cmp"
 	LOG "github.com/vinllen/log4go"
-	"github.com/vinllen/mgo/bson"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
+
+func convertToMap(data interface{}) interface{} {
+	switch v := data.(type) {
+	case primitive.D:
+		result := make(map[string]interface{})
+		for _, elem := range v {
+			result[elem.Key] = convertToMap(elem.Value)
+		}
+		return result
+
+	case primitive.ObjectID:
+		return v.Hex()
+
+	case []interface{}:
+		var newSlice []interface{}
+		for _, item := range v {
+			newSlice = append(newSlice, convertToMap(item))
+		}
+		return newSlice
+
+	default:
+		return v
+	}
+}
+
+func interIsEqual(dynamoData, convertedMongo interface{}) bool {
+
+	//convertedMongo := convertToMap(mongoData)
+	if m, ok := convertedMongo.(map[string]interface{}); ok {
+		delete(m, "_id")
+	} else {
+		LOG.Warn("don't have _id in mongodb document")
+		return false
+	}
+
+	opts := cmp.Options{
+		cmp.FilterPath(func(p cmp.Path) bool {
+			if len(p) > 0 {
+				switch p.Last().(type) {
+				case cmp.MapIndex, cmp.SliceIndex:
+					return true
+				}
+			}
+			return false
+		}, cmp.Transformer("NormalizeNumbers", func(in interface{}) interface{} {
+			switch v := in.(type) {
+			case int, int32, int64, float32, float64:
+				return reflect.ValueOf(v).Convert(reflect.TypeOf(float64(0))).Float()
+			default:
+				return in
+			}
+		})),
+	}
+	// LOG.Warn("tmp2 %v", cmp.Diff(dynamoData, convertedMongo, opts))
+
+	return cmp.Equal(dynamoData, convertedMongo, opts)
+}
 
 const (
 	fetcherChanSize = 512
@@ -31,9 +92,9 @@ type DocumentChecker struct {
 	id                 int
 	ns                 shakeUtils.NS
 	sourceConn         *dynamodb.DynamoDB
-	mongoClient        *shakeUtils.MongoConn
+	mongoClient        *shakeUtils.MongoCommunityConn
 	fetcherChan        chan *dynamodb.ScanOutput // chan between fetcher and parser
-	parserChan         chan protocal.RawData   // chan between parser and writer
+	parserChan         chan protocal.RawData     // chan between parser and writer
 	converter          protocal.Converter        // converter
 	sampler            *Sample                   // use to sample
 	primaryKeyWithType KeyUnion
@@ -42,7 +103,7 @@ type DocumentChecker struct {
 
 func NewDocumentChecker(id int, table string, dynamoSession *dynamodb.DynamoDB) *DocumentChecker {
 	// check mongodb connection
-	mongoClient, err := shakeUtils.NewMongoConn(conf.Opts.TargetAddress, shakeUtils.ConnectModePrimary, true)
+	mongoClient, err := shakeUtils.NewMongoCommunityConn(conf.Opts.TargetAddress, shakeUtils.ConnectModePrimary, true)
 	if err != nil {
 		LOG.Crashf("documentChecker[%v] with table[%v] connect mongodb[%v] failed[%v]", id, table,
 			conf.Opts.TargetAddress, err)
@@ -173,49 +234,45 @@ func (dc *DocumentChecker) executor() {
 			break
 		}
 
-		input := data.Data.(bson.M)
-		var query bson.M
-		if dc.primaryKeyWithType.name != "" && dc.sortKeyWithType.name != "" {
+		//var query map[string]interface{}
+		query := make(map[string]interface{})
+		if dc.primaryKeyWithType.name != "" {
 			// find by union key
-			query = make(bson.M, 0)
-			if conf.Opts.ConvertType == shakeUtils.ConvertTypeRaw {
-				query[dc.primaryKeyWithType.union] = data.Data.(bson.M)[dc.primaryKeyWithType.name].(bson.M)[dc.primaryKeyWithType.tp]
-				query[dc.sortKeyWithType.union] = data.Data.(bson.M)[dc.sortKeyWithType.name].(bson.M)[dc.sortKeyWithType.tp]
-			} else if conf.Opts.ConvertType == shakeUtils.ConvertTypeChange ||
-				conf.Opts.ConvertType == shakeUtils.ConvertMTypeChange {
-				query[dc.primaryKeyWithType.name] = data.Data.(bson.M)[dc.primaryKeyWithType.name]
-				query[dc.sortKeyWithType.name] = data.Data.(bson.M)[dc.sortKeyWithType.name]
+			if conf.Opts.ConvertType == shakeUtils.ConvertMTypeChange {
+				query[dc.primaryKeyWithType.name] = data.Data.(map[string]interface{})[dc.primaryKeyWithType.name]
 			} else {
 				LOG.Crashf("unknown convert type[%v]", conf.Opts.ConvertType)
 			}
-		} else {
-			// find by whole doc
-			query = data.Data.(bson.M)
+		}
+		if dc.sortKeyWithType.name != "" {
+			if conf.Opts.ConvertType == shakeUtils.ConvertMTypeChange {
+				query[dc.sortKeyWithType.name] = data.Data.(map[string]interface{})[dc.sortKeyWithType.name]
+			} else {
+				LOG.Crashf("unknown convert type[%v]", conf.Opts.ConvertType)
+			}
 		}
 
 		LOG.Info("query: %v", query)
 
 		// query
-		var output bson.M
+		var output, outputMap interface{}
 		isSame := true
-		err := dc.mongoClient.Session.DB(dc.ns.Database).C(dc.ns.Collection).Find(query).One(&output)
+		err := dc.mongoClient.Client.Database(dc.ns.Database).Collection(dc.ns.Collection).
+			FindOne(context.TODO(), query).Decode(&output)
 		if err != nil {
-			err = fmt.Errorf("target query failed[%v]", err)
+			err = fmt.Errorf("target query failed[%v][%v][%v]", err, output, query)
 			LOG.Error("%s %v", dc.String(), err)
 		} else {
-			isSame, err = shakeUtils.CompareBson(input, output)
-			if err != nil {
-				err = fmt.Errorf("bson compare failed[%v]", err)
-				LOG.Error("%s %v", dc.String(), err)
-			}
+			outputMap = convertToMap(output)
+			isSame = interIsEqual(data.Data, outputMap)
 		}
 
-		inputJson, _ := json.Marshal(input)
-		outputJson, _ := json.Marshal(output)
+		inputJson, _ := json.Marshal(data.Data)
+		outputJson, _ := json.Marshal(outputMap)
 		if err != nil {
 			f.WriteString(fmt.Sprintf("compare src[%s] to dst[%s] failed: %v\n", inputJson, outputJson, err))
 		} else if isSame == false {
-			LOG.Warn("compare src[%v] and dst[%v] failed", inputJson, outputJson)
+			LOG.Warn("compare src[%s] and dst[%s] failed", inputJson, outputJson)
 			f.WriteString(fmt.Sprintf("src[%s] != dst[%s]\n", inputJson, outputJson))
 		}
 	}
@@ -250,12 +307,12 @@ func (dc *DocumentChecker) checkOutline() error {
 	dynamoCount := out.Table.ItemCount
 
 	// mongo count
-	cnt, err := dc.mongoClient.Session.DB(dc.ns.Database).C(dc.ns.Collection).Count()
+	cnt, err := dc.mongoClient.Client.Database(dc.ns.Database).Collection(dc.ns.Collection).CountDocuments(context.Background(), bson.M{})
 	if err != nil {
 		return fmt.Errorf("get mongo count failed[%v]", err)
 	}
 
-	if *dynamoCount != int64(cnt) {
+	if *dynamoCount != cnt {
 		// return fmt.Errorf("dynamo count[%v] != mongo count[%v]", *dynamoCount, cnt)
 		LOG.Warn("dynamo count[%v] != mongo count[%v]", *dynamoCount, cnt)
 	}

@@ -1,17 +1,17 @@
 package run
 
 import (
-	shakeUtils "nimo-shake/common"
-	"nimo-full-check/configure"
 	"nimo-full-check/checker"
+	conf "nimo-full-check/configure"
+	shakeUtils "nimo-shake/common"
 
 	LOG "github.com/vinllen/log4go"
 )
 
 func Start() {
 	if err := shakeUtils.InitSession(conf.Opts.SourceAccessKeyID, conf.Opts.SourceSecretAccessKey,
-			conf.Opts.SourceSessionToken, conf.Opts.SourceRegion, conf.Opts.SourceEndpointUrl,
-			3, 5000); err != nil {
+		conf.Opts.SourceSessionToken, conf.Opts.SourceRegion, conf.Opts.SourceEndpointUrl,
+		3, 5000); err != nil {
 		LOG.Crashf("init global session failed[%v]", err)
 	}
 
@@ -22,7 +22,7 @@ func Start() {
 	}
 
 	// check mongodb connection
-	mongoClient, err := shakeUtils.NewMongoConn(conf.Opts.TargetAddress, shakeUtils.ConnectModePrimary, true)
+	mongoClient, err := shakeUtils.NewMongoCommunityConn(conf.Opts.TargetAddress, shakeUtils.ConnectModePrimary, true)
 	if err != nil {
 		LOG.Crashf("connect mongodb[%v] failed[%v]", conf.Opts.TargetAddress, err)
 	}

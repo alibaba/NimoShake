@@ -8,12 +8,12 @@ var Opts struct {
 	SourceSessionToken    string `long:"sourceSessionToken" default:"" description:"dynamodb source session token"`
 	SourceRegion          string `long:"sourceRegion" default:"" description:"dynamodb source region"`
 	SourceEndpointUrl     string `long:"sourceEndpointUrl" default:"" description:"dynamodb source endpoint_url"`
-	QpsFull               int    `long:"qpsFull" default:"" description:"qps of scan command, default is 10000"`
-	QpsFullBatchNum       int64  `long:"qpsFullBatchNum" default:"" description:"batch number in each scan command, default is 128"`
+	QpsFull               int    `long:"qpsFull" default:"10000" description:"qps of scan command, default is 10000"`
+	QpsFullBatchNum       int64  `long:"qpsFullBatchNum" default:"128" description:"batch number in each scan command, default is 128"`
 	TargetAddress         string `short:"t" long:"targetAddress" description:"mongodb target address"`
 	DiffOutputFile        string `short:"d" long:"diffOutputFile" default:"nimo-full-check-diff" description:"diff output file name"`
 	Parallel              int    `short:"p" long:"parallel" default:"16" description:"how many threads used to compare, default is 16"`
-	Sample                int    `short:"e" long:"sample" default:"1000" description:"comparison sample number for each table, 0 means disable"`
+	Sample                int64  `short:"e" long:"sample" default:"1000" description:"comparison sample number for each table, 0 means disable"`
 	//IndexPrimary          bool   `short:"m" long:"indexPrimary" description:"enable compare primary index"`
 	//IndexUser             bool   `long:"indexUser" description:"enable compare user index"`
 	FilterCollectionWhite string `long:"filterCollectionWhite" default:"" description:"only compare the given tables, split by ';'"`

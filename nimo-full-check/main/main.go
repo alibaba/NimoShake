@@ -5,8 +5,8 @@ import (
 	"os"
 	"time"
 
-	"nimo-full-check/common"
-	"nimo-full-check/configure"
+	utils "nimo-full-check/common"
+	conf "nimo-full-check/configure"
 	"nimo-full-check/run"
 	shakeUtils "nimo-shake/common"
 	shakeFilter "nimo-shake/filter"
@@ -100,11 +100,10 @@ func sanitizeOptions() error {
 	}
 
 	if conf.Opts.ConvertType == "" {
-		conf.Opts.ConvertType = shakeUtils.ConvertTypeChange
-	} else if conf.Opts.ConvertType != shakeUtils.ConvertTypeRaw &&
-		conf.Opts.ConvertType != shakeUtils.ConvertTypeChange &&
-		conf.Opts.ConvertType != shakeUtils.ConvertMTypeChange {
-		return fmt.Errorf("convertType[%v] illegal", conf.Opts.ConvertType)
+		conf.Opts.ConvertType = shakeUtils.ConvertMTypeChange
+	} else if conf.Opts.ConvertType != shakeUtils.ConvertMTypeChange {
+		return fmt.Errorf("convertType[%v] illegal, only support %v",
+			conf.Opts.ConvertType, shakeUtils.ConvertMTypeChange)
 	}
 
 	return nil
